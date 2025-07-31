@@ -18,22 +18,37 @@ if picking_pool_file and sku_master_file:
     # Step 2: Merge on SKU
     df = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Step 3: Calculate Total Item Vol
+    # Step 3: Clean and filter invalid SKU data
     df['PickingQty'] = df['PickingQty'].fillna(0)
+
+    # Identify invalid rows (missing or zero values in key fields)
+    invalid_rows = df[
+        (df['Qty Commercial Box'].isna()) | (df['Qty Commercial Box'] == 0) |
+        (df['Qty per Carton'].isna()) | (df['Qty per Carton'] == 0) |
+        (df['Item Vol'].isna()) | (df['Item Vol'] == 0)
+    ]
+
+    # Get affected GIs and exclude them
+    invalid_gis = invalid_rows['IssueNo'].unique()
+    df = df[~df['IssueNo'].isin(invalid_gis)].copy()
+
+    if len(invalid_gis) > 0:
+        st.warning(f"⚠️ Excluded {len(invalid_gis)} GIs due to missing or invalid SKU data.")
+
+    # Step 4: Calculate Total Item Vol
     df['Item Vol'] = df['Item Vol'].fillna(0)
-    df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
-    df['Qty per Carton'] = df['Qty per Carton'].replace(0, 1).fillna(1)
+    df['Qty Commercial Box'] = df['Qty Commercial Box'].fillna(1)
+    df['Qty per Carton'] = df['Qty per Carton'].fillna(1)
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    # Step 3.1: Add Carton Info
+    # Step 4.1: Add Carton Info
     def calculate_carton_info(row):
         pq = row.get('PickingQty', 0) or 0
         qpc = row.get('Qty per Carton', 0) or 0
         qcb = row.get('Qty Commercial Box', 0) or 0
         iv = row.get('Item Vol', 0) or 0
 
-        # Validate input values
         valid = all([
             pq is not None,
             qpc not in (None, 0),
@@ -76,25 +91,25 @@ if picking_pool_file and sku_master_file:
 
     df[['CartonCount', 'CartonDescription']] = df.apply(calculate_carton_info, axis=1)
 
-    # Step 4: Calculate Total GI Vol per IssueNo
+    # Step 5: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 4.1: Classify GI as Bin, Layer, or Oversize
+    # Step 5.1: Classify GI as Bin, Layer, or Oversize
     df['GI Class'] = df['Total GI Vol'].apply(
         lambda vol: 'Bin' if vol < 35000 else 'Layer' if vol < 248500 else 'Oversize'
     )
 
-    # Step 5: Count lines per GI
+    # Step 6: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
 
-    # Step 6: Split into Single-line and Multi-line
+    # Step 7: Split into Single-line and Multi-line
     single_line = df[df['Line Count'] == 1].copy()
     multi_line = df[df['Line Count'] > 1].copy()
 
-    # Step 7A: Assign Jobs to Single-line (grouped by ShipToName, 5 GIs per job)
+    # Step 7A: Assign Jobs to Single-line (by ShipToName, 5 GIs per job)
     single_jobs = []
     job_counter = 1
 
@@ -108,7 +123,7 @@ if picking_pool_file and sku_master_file:
 
     single_line_final = pd.concat(single_jobs)
 
-    # Step 7B: Assign Jobs to Multi-line (grouped by GI volume ≤ 600000)
+    # Step 7B: Assign Jobs to Multi-line (GI volume ≤ 600000)
     multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
     multi_line['JobNo'] = None
     current_job = []
@@ -132,10 +147,10 @@ if picking_pool_file and sku_master_file:
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
-    # Combine both groups
+    # Step 8: Combine final results
     final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
-    # Final cleanup and output columns
+    # Step 9: Final cleanup
     final_df = final_df[[
         'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
         'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol',
@@ -144,10 +159,9 @@ if picking_pool_file and sku_master_file:
     ]].drop_duplicates()
 
     st.success("✅ Processing complete!")
-
     st.dataframe(final_df.head(20))
 
-    # Download button
+    # Step 10: Export
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         final_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
