@@ -135,8 +135,8 @@ if picking_pool_file and sku_master_file:
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
     # Step 14: Rename 'Storage Location' to 'Batch No'
-    if 'Storage Location' in final_df.columns:
-        final_df['Batch No'] = final_df['Storage Location']
+    if 'StorageLocation' in final_df.columns:
+        final_df['Batch No'] = final_df['StorageLocation']
     else:
         final_df['Batch No'] = None
 
