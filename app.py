@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
 st.title("Master Pick Ticket Generator - Pick by Cart")
 
@@ -15,7 +16,12 @@ if picking_pool_file and sku_master_file:
     st.success("Files uploaded and merged successfully!")
     st.write("Sample Merged Data:", merged.head())
 
-    output = merged.to_excel(index=False, engine='openpyxl')
+    # Save merged DataFrame to memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        merged.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
+    output.seek(0)  # Rewind to start so it can be read
+
     st.download_button(
         label="Download Master Pick Ticket",
         data=output,
