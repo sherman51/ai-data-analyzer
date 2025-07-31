@@ -199,37 +199,48 @@ if picking_pool_file and sku_master_file:
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
 
-import openai
 
+# --- OpenAI API key setup with safe fallback ---
 if "OPENAI_API_KEY" in st.secrets:
     openai.api_key = st.secrets["OPENAI_API_KEY"]
 else:
-    st.warning("⚠️ OpenAI API key not found in secrets. AI Assistant will be disabled.")
+    openai.api_key = None
+    st.sidebar.warning("⚠️ OpenAI API key not found in secrets. AI Assistant will be disabled.")
 
-# Add a chatbot panel
+# --- AI Assistant chatbot panel in sidebar ---
 st.sidebar.title("🤖 AI Assistant")
 show_chat = st.sidebar.checkbox("Open Chat Assistant")
 
 if show_chat:
     st.subheader("🤖 Ask me about the pick ticket data!")
 
-    # Load uploaded data into memory
-    if 'final_df' in locals():
-        chat_history = st.session_state.get("chat_history", [])
+    if openai.api_key is None:
+        st.warning("AI Assistant disabled due to missing API key.")
+    else:
+        # Check if data is ready
+        if 'final_df' in locals() and not final_df.empty:
+            # Initialize chat history in session state
+            if "chat_history" not in st.session_state:
+                st.session_state["chat_history"] = []
 
-        for msg in chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+            chat_history = st.session_state["chat_history"]
 
-        prompt = st.chat_input("Ask a question about the pick ticket data...")
-        if prompt:
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            # Render previous chat messages
+            for msg in chat_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
 
-            # You can build a prompt using the dataframe (e.g., summary)
-            df_info = final_df.describe(include='all').to_string()
+            # Input box for user question
+            prompt = st.chat_input("Ask a question about the pick ticket data...")
 
-            full_prompt = f"""
+            if prompt:
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                # Prepare data summary for prompt context (limit length if needed)
+                df_info = final_df.head(100).describe(include='all').to_string()
+
+                full_prompt = f"""
 You are a data assistant. Answer questions about the pick ticket data.
 Here is the summary of the data:
 {df_info}
@@ -237,22 +248,29 @@ Here is the summary of the data:
 User question: {prompt}
 """
 
-            # Call OpenAI API (requires valid key and setup)
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
-                    {"role": "user", "content": full_prompt}
-                ]
-            )
+                try:
+                    response = openai.ChatCompletion.create(
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
+                            {"role": "user", "content": full_prompt}
+                        ]
+                    )
+                    answer = response['choices'][0]['message']['content']
 
-            answer = response['choices'][0]['message']['content']
+                    with st.chat_message("assistant"):
+                        st.markdown(answer)
 
-            with st.chat_message("assistant"):
-                st.markdown(answer)
+                    # Save conversation history
+                    chat_history.append({"role": "user", "content": prompt})
+                    chat_history.append({"role": "assistant", "content": answer})
+                    st.session_state["chat_history"] = chat_history
 
-            chat_history.append({"role": "user", "content": prompt})
-            chat_history.append({"role": "assistant", "content": answer})
-            st.session_state["chat_history"] = chat_history
-    else:
-        st.warning("Please upload files first to enable the assistant.")
+                except Exception as e:
+                    st.error(f"OpenAI API error: {e}")
+
+        else:
+            st.warning("Please upload Picking Pool and SKU Master files to enable the assistant.")
+
+# --- Your existing display and download code below ---
+# e.g., st.dataframe(final_df), st.download_button(...)
