@@ -1,99 +1,153 @@
-import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import io
-import smtplib
-from email.mime.text import MIMEText
-import openai
+import numpy as np
 
-st.title("AI Data Analyzer + Automated Email Reporter")
+# Load data (replace with your file paths or sources)
+picking_pool = pd.read_excel('PickingPool.xlsx')
+sku_master = pd.read_excel('SKUMaster.xlsx')
 
-# Upload CSV or Excel
-uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+# Step 1: Join SKU info
+df = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-if uploaded_file:
-    if uploaded_file.type == "text/csv":
-        df = pd.read_csv(uploaded_file)
+# Step 2: Calculate Total Item Volume
+df['Item Vol'].fillna(0, inplace=True)
+df['PickingQty'].fillna(0, inplace=True)
+df['Qty Commercial Box'].replace(0, 1, inplace=True)
+df['Qty Commercial Box'].fillna(1, inplace=True)
+
+df['Total Item Vol'] = df['Item Vol'] * (df['PickingQty'] / df['Qty Commercial Box'])
+
+# Step 3: Add Carton Info
+def get_carton_info(row):
+    pq = row['PickingQty']
+    qpc = row['Qty per Carton'] or 0
+    qcb = row['Qty Commercial Box'] or 0
+    iv = row['Item Vol']
+    if any(x == 0 or pd.isna(x) for x in [pq, qpc, qcb, iv]):
+        return pd.Series([None, 'Invalid'])
+    
+    cartons = pq // qpc
+    loose = pq - cartons * qpc
+    loose_vol = loose * iv
+    if loose == 0:
+        loose_box = ""
+    elif loose_vol <= 1200:
+        loose_box = "1XS"
+    elif loose_vol <= 6000:
+        loose_box = "1S"
+    elif loose_vol <= 12000:
+        loose_box = "1Rectangle"
+    elif loose_vol <= 18000:
+        loose_box = "1M"
+    elif loose_vol <= 48000:
+        loose_box = "1L"
     else:
-        df = pd.read_excel(uploaded_file)
+        loose_box = "1XL"
+    
+    desc = f"{int(cartons)} Commercial Carton" if cartons > 0 else ""
+    if cartons > 0 and loose_box:
+        desc += " + " + loose_box
+    elif cartons == 0:
+        desc = loose_box
 
-    st.write("### Data Preview")
-    st.dataframe(df.head())
+    total_c = cartons + (1 if loose > 0 else 0)
+    return pd.Series([total_c, desc])
 
-    st.write("### Data Summary")
-    st.write(df.describe())
+df[['CartonCount', 'CartonDescription']] = df.apply(get_carton_info, axis=1)
 
-    # Plot correlation heatmap for numeric data
-    numeric_df = df.select_dtypes(include='number')
-    if not numeric_df.empty:
-        st.write("### Correlation Heatmap")
-        fig, ax = plt.subplots()
-        sns.heatmap(numeric_df.corr(), annot=True, ax=ax)
-        st.pyplot(fig)
+# Step 4: Replace null item volumes (used only for grouping later)
+df['Item Vol'].replace(np.nan, 1e+173, inplace=True)
+
+# Step 5: Group for GI-level decisions
+grouped = df.groupby('IssueNo').agg(
+    AvgVol=('Item Vol', 'mean'),
+    NoOfLines=('SKU', 'count')
+).reset_index()
+
+df = df.merge(grouped, on='IssueNo')
+
+# Filter GIs for cart method
+df = df[df['AvgVol'] <= 248500]
+
+# Step 6: Assign PickingMethod
+def picking_method(vol):
+    if pd.isna(vol):
+        return 'Unknown'
+    elif vol < 35000:
+        return 'Bin'
+    elif vol < 248500:
+        return 'Layer'
     else:
-        st.write("No numeric columns to show correlation.")
+        return 'Order'
 
-    # OpenAI GPT summary
-    st.write("### GPT Summary of Data")
-    openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
-    if openai_api_key:
-        openai.api_key = openai_api_key
+df['PickingMethod'] = df['Total Item Vol'].apply(picking_method)
 
-        desc = df.describe().to_string()
-        prompt = f"Summarize the following data description for a business user:\n{desc}"
+# Separate single-line and multi-line GIs
+single_line = df[df['NoOfLines'] == 1]
+multi_line = df[df['NoOfLines'] > 1]
 
-        if st.button("Generate Summary"):
-            with st.spinner("Generating summary..."):
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a helpful data analyst."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        max_tokens=200,
-                        temperature=0.5,
-                    )
-                    summary = response['choices'][0]['message']['content']
-                    st.write(summary)
+# Step 7: Assign Jobs for Single-line (4 per job per ShipToName)
+job_no = 1
+assigned_jobs = []
 
-                    # Save summary for email
-                    st.session_state['summary'] = summary
-                except Exception as e:
-                    st.error(f"Error: {e}")
+for name, group in single_line.groupby('ShipToName'):
+    group = group.copy()
+    group['JobNo'] = ['Job' + str(job_no + i // 4).zfill(3) for i in range(len(group))]
+    job_no += (len(group) + 3) // 4
+    assigned_jobs.append(group)
 
-    # Download report button
-    if uploaded_file and 'summary' in st.session_state:
-        report_text = f"Data Summary Report\n\n{df.describe().to_string()}\n\nGPT Summary:\n{st.session_state['summary']}"
+assigned_single = pd.concat(assigned_jobs, ignore_index=True)
+max_single_index = assigned_single['JobNo'].str.extract(r'(\d+)$').astype(int).max().values[0] if not assigned_single.empty else 0
 
-        report_bytes = report_text.encode('utf-8')
-        st.download_button("Download Report as TXT", data=report_bytes, file_name="report.txt")
+# Step 8: Multi-line GI Processing
+multi_grouped = multi_line.groupby('IssueNo').agg({
+    'Total Item Vol': 'sum'
+}).rename(columns={'Total Item Vol': 'Total GI Vol'}).reset_index()
 
-        # Email form
-        st.write("### Send Report by Email")
-        with st.form("email_form"):
-            sender_email = st.text_input("Your Email (sender)")
-            sender_password = st.text_input("Your Email Password or App Password", type="password")
-            recipient_email = st.text_input("Recipient Email")
-            submitted = st.form_submit_button("Send Email")
+multi_line = multi_line.merge(multi_grouped, on='IssueNo')
+multi_line['PickingMethod'] = multi_line['Total GI Vol'].apply(picking_method)
+multi_line = multi_line[multi_line['PickingMethod'].isin(['Bin', 'Layer'])]
 
-            if submitted:
-                if sender_email and sender_password and recipient_email:
-                    try:
-                        msg = MIMEText(report_text)
-                        msg['Subject'] = "Automated Data Analysis Report"
-                        msg['From'] = sender_email
-                        msg['To'] = recipient_email
+# Step 9: Assign Multi-line Jobs (by max bin/layer vol 500,000)
+job_counter = max_single_index + 1
+job_results = []
+seen_issues = set()
 
-                        server = smtplib.SMTP("smtp.gmail.com", 587)
-                        server.starttls()
-                        server.login(sender_email, sender_password)
-                        server.send_message(msg)
-                        server.quit()
+for method in ['Bin', 'Layer']:
+    method_group = multi_line[multi_line['PickingMethod'] == method]
+    method_group = method_group.sort_values('IssueNo')
+    
+    bucket, current_vol = [], 0
+    for _, row in method_group.iterrows():
+        if row['IssueNo'] in seen_issues:
+            continue
+        vol = 35000 if method == 'Bin' else 248500
+        if current_vol + vol > 500000:
+            # assign job to current bucket
+            for b in bucket:
+                b['JobNo'] = f"Job{str(job_counter).zfill(3)}"
+                job_results.append(b)
+            job_counter += 1
+            bucket, current_vol = [], 0
+        bucket.append(row.to_dict())
+        seen_issues.add(row['IssueNo'])
+        current_vol += vol
+    # Assign remaining
+    for b in bucket:
+        b['JobNo'] = f"Job{str(job_counter).zfill(3)}"
+        job_results.append(b)
+    job_counter += 1
 
-                        st.success("Email sent successfully!")
-                    except Exception as e:
-                        st.error(f"Failed to send email: {e}")
-                else:
-                    st.error("Please fill in all email fields.")
+assigned_multi = pd.DataFrame(job_results)
+
+# Step 10: Combine All
+final_df = pd.concat([assigned_single, assigned_multi], ignore_index=True)
+
+# Optional: Bin No tagging
+final_df['Index'] = final_df.groupby('IssueNo').cumcount() + 1
+final_df['Bin No.'] = final_df['PickingMethod'] + final_df['Index'].astype(str)
+
+# Final Columns (optional cleanup)
+final_df = final_df[['IssueNo', 'SKU', 'CartonDescription', 'ShipToName', 'JobNo', 'PickingMethod', 'Bin No.']].drop_duplicates(subset=['SKU'])
+
+# Export to Excel
+final_df.to_excel('MasterPickTicket.xlsx', index=False)
