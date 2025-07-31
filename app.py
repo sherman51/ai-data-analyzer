@@ -202,7 +202,7 @@ else:
 import openai
 
 # Optional: set your API key securely
-# openai.api_key = st.secrets["OPENAI_API_KEY"]
+ openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # Add a chatbot panel
 st.sidebar.title("🤖 AI Assistant")
