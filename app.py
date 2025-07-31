@@ -1,18 +1,21 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import openai
 
+# ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
 st.title("📦 Master Pick Ticket Generator – Pick by Cart")
 
-# Upload Section
+# ------------------------ FILE UPLOADS ------------------------
 st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
 sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=["xlsx"])
 
-# User input for filtering GI type (Single-line or Multi-line)
+# Filter option
 gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
+# ------------------------ HELPER FUNCTIONS ------------------------
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
@@ -45,156 +48,174 @@ def calculate_carton_info(row):
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
+def classify_gi(row):
+    return 'Bin' if row['Total GI Vol'] < 600000 else 'Layer'
+
+# ------------------------ DATA PROCESSING ------------------------
 if picking_pool_file and sku_master_file:
-    # Step 1: Load files
-    picking_pool = pd.read_excel(picking_pool_file)
-    sku_master = pd.read_excel(sku_master_file)
+    try:
+        picking_pool = pd.read_excel(picking_pool_file)
+        sku_master = pd.read_excel(sku_master_file)
 
-    # Convert DeliveryDate to datetime and drop rows with invalid dates
-    picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
-    picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
+        # Filter valid delivery dates
+        picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
+        picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
+        
+        # Sidebar date input
+        min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
+        delivery_range = st.sidebar.date_input("📅 Filter by Delivery Date", (min_date, max_date), min_value=min_date, max_value=max_date)
 
-    # Sidebar date filter
-    min_date = picking_pool['DeliveryDate'].min()
-    max_date = picking_pool['DeliveryDate'].max()
+        if isinstance(delivery_range, tuple) and len(delivery_range) == 2:
+            start, end = pd.to_datetime(delivery_range[0]), pd.to_datetime(delivery_range[1])
+            picking_pool = picking_pool[(picking_pool['DeliveryDate'] >= start) & (picking_pool['DeliveryDate'] <= end)]
 
-    delivery_date_range = st.sidebar.date_input(
-        "📅 Filter by Delivery Date Range",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
+        # Remove GIs with missing info
+        merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
+        missing_issues = merged_check[
+            merged_check['Qty Commercial Box'].isna() |
+            merged_check['Qty per Carton'].isna() |
+            merged_check['Item Vol'].isna()
+        ]['IssueNo'].unique()
+        picking_pool = picking_pool[~picking_pool['IssueNo'].isin(missing_issues)]
 
-    # Apply delivery date filter
-    if isinstance(delivery_date_range, tuple) and len(delivery_date_range) == 2:
-        start_date, end_date = pd.to_datetime(delivery_date_range[0]), pd.to_datetime(delivery_date_range[1])
-        picking_pool = picking_pool[
-            (picking_pool['DeliveryDate'] >= start_date) &
-            (picking_pool['DeliveryDate'] <= end_date)
-        ]
+        # Merge actual data
+        df = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Exclude GIs with missing critical SKU info
-    merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
-    missing_info = merged_check[
-        merged_check['Qty Commercial Box'].isna() |
-        merged_check['Qty per Carton'].isna() |
-        merged_check['Item Vol'].isna()
-    ]['IssueNo'].unique()
+        # Fill & compute
+        df['PickingQty'] = df['PickingQty'].fillna(0)
+        df['Item Vol'] = df['Item Vol'].fillna(0)
+        df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
+        df['Qty per Carton'] = df['Qty per Carton'].replace(0, 1).fillna(1)
+        df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
+        # GI volume and line count
+        df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
+        df = df.merge(df.groupby('IssueNo').size().rename('Line Count'), on='IssueNo')
 
-    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
-    df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
+        # Split data
+        single_line = df[df['Line Count'] == 1].copy()
+        multi_line = df[df['Line Count'] > 1].copy()
 
-    # Step 3: Calculate Total Item Vol
-    df['PickingQty'] = df['PickingQty'].fillna(0)
-    df['Item Vol'] = df['Item Vol'].fillna(0)
-    df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
-    df['Qty per Carton'] = df['Qty per Carton'].replace(0, 1).fillna(1)
+        # Job Assignment - Single line
+        job_counter = 1
+        single_jobs = []
+        for name, group in single_line.groupby('ShipToName'):
+            group = group.sort_values('IssueNo')
+            group['GI_Group_Index'] = group.groupby('IssueNo').ngroup()
+            group['JobNo'] = group['GI_Group_Index'].apply(lambda x: f"Job{str(job_counter + x // 5).zfill(3)}")
+            job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
+            single_jobs.append(group)
+        single_line_final = pd.concat(single_jobs)
 
-    df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
+        # Job Assignment - Multi-line
+        multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
+        multi_line['JobNo'] = None
+        current_job, current_vol, job_id = [], 0, job_counter
 
-    # Step 4: Calculate Total GI Vol per IssueNo
-    gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
-    gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
-    df = df.merge(gi_volume, on='IssueNo', how='left')
+        for _, row in multi_summary.iterrows():
+            if current_vol + row['Total GI Vol'] > 600000:
+                for gi in current_job:
+                    multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
+                job_id += 1
+                current_job, current_vol = [], 0
+            current_job.append(row['IssueNo'])
+            current_vol += row['Total GI Vol']
+        for gi in current_job:
+            multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
-    # Step 5: Count lines per GI
-    line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
-    df = df.merge(line_counts, on='IssueNo', how='left')
+        # Combine all
+        final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
-    # Step 6: Split into Single-line and Multi-line
-    single_line = df[df['Line Count'] == 1].copy()
-    multi_line = df[df['Line Count'] > 1].copy()
-
-    # Step 7A: Assign Jobs to Single-line (grouped by ShipToName, 5 GIs per job)
-    single_jobs = []
-    job_counter = 1
-
-    for name, group in single_line.groupby('ShipToName'):
-        group = group.copy()
-        group = group.sort_values('IssueNo')
-        group['GI_Group_Index'] = group.groupby('IssueNo').ngroup()
-        group['JobNo'] = group['GI_Group_Index'].apply(lambda x: f"Job{str(job_counter + x // 5).zfill(3)}")
-        job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
-        single_jobs.append(group)
-
-    single_line_final = pd.concat(single_jobs)
-
-    # Step 7B: Assign Jobs to Multi-line (grouped by GI volume ≤ 600000)
-    multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
-    multi_line['JobNo'] = None
-    current_job = []
-    current_vol = 0
-    job_id = job_counter
-
-    for _, row in multi_summary.iterrows():
-        issue_no = row['IssueNo']
-        vol = row['Total GI Vol']
-        if current_vol + vol > 600000:
-            for gi in current_job:
-                multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
-            job_id += 1
-            current_job = []
-            current_vol = 0
-
-        current_job.append(issue_no)
-        current_vol += vol
-
-    for gi in current_job:
-        multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
-
-    # Combine both groups
-    final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
-
-    # Filter by GI Type
-    if 'Line Count' in final_df.columns:
+        # GI type filter
         if gi_type == "Single-line":
             final_df = final_df[final_df['Line Count'] == 1]
         elif gi_type == "Multi-line":
             final_df = final_df[final_df['Line Count'] > 1]
-    else:
-        st.error("Column 'Line Count' not found. Please check the data processing steps.")
 
-    # Step 8: Add Carton Info columns
-    carton_info = final_df.apply(calculate_carton_info, axis=1)
-    final_df = pd.concat([final_df, carton_info], axis=1)
+        # Carton Info + GI Class
+        final_df = pd.concat([final_df, final_df.apply(calculate_carton_info, axis=1)], axis=1)
+        final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
-    # Step 9: Add GI Class column (Bin or Layer)
-    def classify_gi(row):
-        vol = row['Total GI Vol']
-        return 'Bin' if vol < 600000 else 'Layer'
+        # Extra columns
+        final_df['Batch No'] = final_df.get('StorageLocation')
+        final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
+        # Final output
+        output_df = final_df[[ 
+            'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
+            'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
+        ]].drop_duplicates()
 
-    # Step 10: Add Batch No (from Storage Location)
-    final_df['Batch No'] = final_df['StorageLocation'] if 'StorageLocation' in final_df.columns else None
+        st.success("✅ Processing complete!")
+        st.dataframe(output_df.head(20))
 
-    # Step 11: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
-    final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
+        # Download
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
+        st.download_button(
+            label="⬇️ Download Master Pick Ticket Excel",
+            data=output.getvalue(),
+            file_name="MasterPickTicket.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-    # Step 12: Final cleanup
-    final_df = final_df[[ 
-        'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
-        'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
-    ]].drop_duplicates()
+        # Store for AI
+        st.session_state["final_df"] = final_df
 
-    # Display result
-    st.success("✅ Processing complete!")
-    st.dataframe(final_df.head(20))
-
-    # Download section
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        final_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
-    output.seek(0)
-
-    st.download_button(
-        label="⬇️ Download Master Pick Ticket Excel",
-        data=output,
-        file_name="MasterPickTicket.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    except Exception as e:
+        st.error(f"❌ Error during processing: {e}")
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
+# ------------------------ AI ASSISTANT ------------------------
+st.sidebar.title("🤖 AI Assistant")
+if st.sidebar.checkbox("Open Chat Assistant"):
+
+    st.subheader("🤖 Ask me about the pick ticket data!")
+
+    if "final_df" in st.session_state:
+        final_df = st.session_state["final_df"]
+        chat_history = st.session_state.get("chat_history", [])
+
+        for msg in chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        prompt = st.chat_input("Ask a question about the pick ticket data...")
+        if prompt:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            df_info = final_df.describe(include='all').to_string()
+            full_prompt = f"""
+You are a data assistant. Answer questions about the pick ticket data below:
+
+{df_info}
+
+User question: {prompt}
+"""
+
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
+                        {"role": "user", "content": full_prompt}
+                    ]
+                )
+                answer = response['choices'][0]['message']['content']
+            except Exception as e:
+                answer = f"❌ Failed to call OpenAI API: {e}"
+
+            with st.chat_message("assistant"):
+                st.markdown(answer)
+
+            chat_history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": answer}
+            ])
+            st.session_state["chat_history"] = chat_history
+    else:
+        st.warning("Please upload and process data first.")
