@@ -60,7 +60,7 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
+    # Step 2: Merge filtered picking pool and sku_master (keep StorageLocation)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
     # Step 3: Calculate Total Item Vol
@@ -141,9 +141,9 @@ if picking_pool_file and sku_master_file:
 
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
-    # Step 10: Add Batch No (from Storage Location)
-    if 'Storage Location' in final_df.columns:
-        final_df['Batch No'] = final_df['Storage Location']
+    # Step 10: Add Batch No (from StorageLocation)
+    if 'StorageLocation' in final_df.columns:
+        final_df['Batch No'] = final_df['StorageLocation']
     else:
         final_df['Batch No'] = None
 
