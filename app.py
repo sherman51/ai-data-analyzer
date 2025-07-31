@@ -112,6 +112,7 @@ if picking_pool_file and sku_master_file:
         issue_no = row['IssueNo']
         vol = row['Total GI Vol']
         if current_vol + vol > 600000:
+            # Assign JobNo to the GIs in the current job
             for gi in current_job:
                 multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
             job_id += 1
@@ -121,7 +122,7 @@ if picking_pool_file and sku_master_file:
         current_job.append(issue_no)
         current_vol += vol
 
-    # Assign remaining
+    # Assign remaining GIs to jobs
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
@@ -142,15 +143,13 @@ if picking_pool_file and sku_master_file:
     carton_info = final_df.apply(calculate_carton_info, axis=1)
     final_df = pd.concat([final_df, carton_info], axis=1)
 
-    # Step 9: Add GI Class column (Bin, Layer, Carton)
+    # Step 9: Add GI Class column (Bin or Layer)
     def classify_gi(row):
         vol = row['Total GI Vol']
-        if vol < 35000:
+        if vol < 600000:  # Cap volume at 600,000 for a "Bin" classification
             return 'Bin'
-        elif vol < 248500:
-            return 'Layer'
         else:
-            return 'Carton'
+            return 'Layer'  # If the volume exceeds the threshold, classify as 'Layer'
 
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
