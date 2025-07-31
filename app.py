@@ -199,11 +199,12 @@ if picking_pool_file and sku_master_file:
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
 
+import openai
+import streamlit as st
 import os
-from openai import OpenAI
 
 # Initialize OpenAI client
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=st.secrets["secret"])
 
 st.markdown("## 🤖 AI Assistant")
 st.info("You can ask questions like:\n- How many SKUs are in the data?\n- What’s the total PickingQty?\n- What’s the average item volume?\n- Suggest optimization for multi-line GIs")
