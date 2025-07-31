@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
-# Streamlit Setup
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
 st.title("📦 Master Pick Ticket Generator – Pick by Cart")
 
@@ -14,23 +13,6 @@ sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=
 # User input for filtering GI type (Single-line or Multi-line)
 gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
-# Define Chatbot function
-def chatbot(query, final_df):
-    # Example responses
-    if 'reprocess' in query.lower():
-        return "Sure! You can filter the data by Delivery Date, GI Type, or other options. What would you like to adjust?"
-    
-    if 'total carton count' in query.lower():
-        total_cartons = final_df['CartonCount'].sum()
-        return f"The total carton count is {total_cartons}."
-
-    if 'gi count' in query.lower():
-        gi_count = final_df['IssueNo'].nunique()
-        return f"There are {gi_count} unique GI numbers in the dataset."
-
-    return "I'm sorry, I didn't understand that. Please ask about reprocessing or a specific query on the data."
-
-# Function to calculate Carton Info
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
@@ -63,7 +45,6 @@ def calculate_carton_info(row):
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
-# If both files are uploaded
 if picking_pool_file and sku_master_file:
     # Step 1: Load files
     picking_pool = pd.read_excel(picking_pool_file)
@@ -88,11 +69,11 @@ if picking_pool_file and sku_master_file:
     if isinstance(delivery_date_range, tuple) and len(delivery_date_range) == 2:
         start_date, end_date = pd.to_datetime(delivery_date_range[0]), pd.to_datetime(delivery_date_range[1])
         picking_pool = picking_pool[
-            (picking_pool['DeliveryDate'] >= start_date) & 
+            (picking_pool['DeliveryDate'] >= start_date) &
             (picking_pool['DeliveryDate'] <= end_date)
         ]
 
-    # Filter rows missing critical SKU information
+    # Exclude GIs with missing critical SKU info
     merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
     missing_info = merged_check[
         merged_check['Qty Commercial Box'].isna() |
@@ -102,7 +83,7 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Merge picking pool and SKU master
+    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
     # Step 3: Calculate Total Item Vol
@@ -113,20 +94,78 @@ if picking_pool_file and sku_master_file:
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    # Process the data as in your current script...
+    # Step 4: Calculate Total GI Vol per IssueNo
+    gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
+    gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
+    df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 8: Add Carton Info columns
-    carton_info = df.apply(calculate_carton_info, axis=1)
-    final_df = pd.concat([df, carton_info], axis=1)
+    # Step 5: Count lines per GI
+    line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
+    df = df.merge(line_counts, on='IssueNo', how='left')
+
+    # Step 6: Split into Single-line and Multi-line
+    single_line = df[df['Line Count'] == 1].copy()
+    multi_line = df[df['Line Count'] > 1].copy()
+
+    # Step 7A: Assign Jobs to Single-line (grouped by ShipToName, 5 GIs per job)
+    single_jobs = []
+    job_counter = 1
+
+    for name, group in single_line.groupby('ShipToName'):
+        group = group.copy()
+        group = group.sort_values('IssueNo')
+        group['GI_Group_Index'] = group.groupby('IssueNo').ngroup()
+        group['JobNo'] = group['GI_Group_Index'].apply(lambda x: f"Job{str(job_counter + x // 5).zfill(3)}")
+        job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
+        single_jobs.append(group)
+
+    single_line_final = pd.concat(single_jobs)
+
+    # Step 7B: Assign Jobs to Multi-line (grouped by GI volume ≤ 600000)
+    multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
+    multi_line['JobNo'] = None
+    current_job = []
+    current_vol = 0
+    job_id = job_counter
+
+    for _, row in multi_summary.iterrows():
+        issue_no = row['IssueNo']
+        vol = row['Total GI Vol']
+        if current_vol + vol > 600000:
+            for gi in current_job:
+                multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
+            job_id += 1
+            current_job = []
+            current_vol = 0
+
+        current_job.append(issue_no)
+        current_vol += vol
+
+    for gi in current_job:
+        multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
+
+    # Combine both groups
+    final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
     # Filter by GI Type
-    if gi_type == "Single-line":
-        final_df = final_df[final_df['Line Count'] == 1]
-    elif gi_type == "Multi-line":
-        final_df = final_df[final_df['Line Count'] > 1]
+    if 'Line Count' in final_df.columns:
+        if gi_type == "Single-line":
+            final_df = final_df[final_df['Line Count'] == 1]
+        elif gi_type == "Multi-line":
+            final_df = final_df[final_df['Line Count'] > 1]
+    else:
+        st.error("Column 'Line Count' not found. Please check the data processing steps.")
+
+    # Step 8: Add Carton Info columns
+    carton_info = final_df.apply(calculate_carton_info, axis=1)
+    final_df = pd.concat([final_df, carton_info], axis=1)
 
     # Step 9: Add GI Class column (Bin or Layer)
-    final_df['GI Class'] = final_df.apply(lambda row: 'Bin' if row['Total GI Vol'] < 600000 else 'Layer', axis=1)
+    def classify_gi(row):
+        vol = row['Total GI Vol']
+        return 'Bin' if vol < 600000 else 'Layer'
+
+    final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
     # Step 10: Add Batch No (from Storage Location)
     final_df['Batch No'] = final_df['StorageLocation'] if 'StorageLocation' in final_df.columns else None
@@ -135,8 +174,10 @@ if picking_pool_file and sku_master_file:
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
     # Step 12: Final cleanup
-    final_df = final_df[['IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
-                         'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count']].drop_duplicates()
+    final_df = final_df[[ 
+        'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
+        'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
+    ]].drop_duplicates()
 
     # Display result
     st.success("✅ Processing complete!")
@@ -154,14 +195,6 @@ if picking_pool_file and sku_master_file:
         file_name="MasterPickTicket.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    # Chatbot Section
-    st.sidebar.header("💬 Chatbot Interaction")
-    user_query = st.sidebar.text_input("Ask a question or request reprocessing:")
-
-    if user_query:
-        response = chatbot(user_query, final_df)
-        st.sidebar.write(f"🤖 Chatbot: {response}")
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
