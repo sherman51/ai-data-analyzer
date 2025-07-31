@@ -150,12 +150,6 @@ if picking_pool_file and sku_master_file:
     # Step 11: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    # Optional cleanup and reordering columns
-    final_df = final_df[[
-        'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location', 'PickingQty',
-        'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
-    ]].drop_duplicates()
-
 
     st.success("✅ Processing complete!")
 
