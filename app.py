@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from io import BytesIO
 
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
@@ -25,7 +24,7 @@ def calculate_carton_info(row):
 
     if loose > 0:
         looseVol = loose * iv
-        # Carton sizes for loose items: XS, S, Rectangle, L
+        # Only 4 carton sizes for loose: XS, S, Rectangle, L
         if looseVol <= 1200:
             looseBox = "1XS"
         elif looseVol <= 6000:
@@ -61,10 +60,10 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Merge again with filtered picking pool, keep Storage Location
+    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Step 3: Clean and calculate Total Item Vol
+    # Step 3: Calculate Total Item Vol
     df['PickingQty'] = df['PickingQty'].fillna(0)
     df['Item Vol'] = df['Item Vol'].fillna(0)
     df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
@@ -119,7 +118,7 @@ if picking_pool_file and sku_master_file:
         current_job.append(issue_no)
         current_vol += vol
 
-    # Assign remaining GIs
+    # Assign remaining
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
@@ -130,7 +129,7 @@ if picking_pool_file and sku_master_file:
     carton_info = final_df.apply(calculate_carton_info, axis=1)
     final_df = pd.concat([final_df, carton_info], axis=1)
 
-    # Step 9: Add GI Class column
+    # Step 9: Add GI Class column (Bin, Layer, Carton)
     def classify_gi(row):
         vol = row['Total GI Vol']
         if vol < 35000:
@@ -142,20 +141,25 @@ if picking_pool_file and sku_master_file:
 
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
-    # Step 10: Add Batch No column (from Storage Location)
-    final_df['Batch No'] = final_df['Storage Location']
+    # Step 10: Add Batch No (from Storage Location)
+    if 'Storage Location' in final_df.columns:
+        final_df['Batch No'] = final_df['Storage Location']
+    else:
+        final_df['Batch No'] = None
 
-    # Step 11: Add Commercial Box Count (rounded up)
-    final_df['Commercial Box Count'] = np.ceil(final_df['PickingQty'] / final_df['Qty Commercial Box']).astype(int)
+    # Step 11: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
+    final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    # Reorder columns for output
+    # Optional cleanup and reordering columns
     final_df = final_df[[
         'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
         'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol', 'Total GI Vol',
-        'CartonCount', 'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
+        'CartonCount', 'CartonDescription', 'GI Class', 'JobNo',
+        'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
 
     st.success("✅ Processing complete!")
+
     st.dataframe(final_df.head(20))
 
     # Download button
