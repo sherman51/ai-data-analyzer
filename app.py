@@ -29,31 +29,30 @@ def calculate_carton_info(row):
         pq = float(row.get('PickingQty', 0) or 0)
         qpc = float(row.get('Qty per Carton', 0) or 0)
         iv = float(row.get('Item Vol', 0) or 0)
-    except Exception as e:
-        # If any conversion fails
+    except Exception:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
 
-    # Validate inputs
     if pq == 0 or qpc == 0 or iv == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
 
     cartons = int(pq // qpc)
     loose = int(pq % qpc)
 
+    # Pluralize the word "Carton"
+    carton_word = "Carton" if cartons == 1 else "Cartons"
+
     if loose > 0:
         looseVol = loose * iv
-        # Debug print for loose volume calculation
-        print(f"DEBUG: PickingQty={pq}, Qty per Carton={qpc}, Item Vol={iv}, Loose={loose}, LooseVol={looseVol}")
-
         looseBox = get_loose_box_size(looseVol)
 
         if cartons > 0:
-            desc = f"{cartons} Commercial Carton + {looseBox}"
+            desc = f"{cartons} Commercial {carton_word} + {looseBox}"
         else:
             desc = looseBox
         totalC = cartons + 1
     else:
-        desc = f"{cartons} Commercial Carton"
+        # No loose cartons, just full commercial cartons
+        desc = f"{cartons} Commercial {carton_word}"
         totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
