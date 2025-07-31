@@ -22,8 +22,59 @@ if picking_pool_file and sku_master_file:
     df['PickingQty'] = df['PickingQty'].fillna(0)
     df['Item Vol'] = df['Item Vol'].fillna(0)
     df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
+    df['Qty per Carton'] = df['Qty per Carton'].replace(0, 1).fillna(1)
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
+
+    # Step 3.1: Add Carton Info
+    def calculate_carton_info(row):
+        pq = row.get('PickingQty', 0) or 0
+        qpc = row.get('Qty per Carton', 0) or 0
+        qcb = row.get('Qty Commercial Box', 0) or 0
+        iv = row.get('Item Vol', 0) or 0
+
+        # Validate input values
+        valid = all([
+            pq is not None,
+            qpc not in (None, 0),
+            qcb not in (None, 0),
+            iv is not None
+        ])
+
+        if not valid:
+            return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
+
+        cartons = pq // qpc
+        loose = pq - cartons * qpc
+        looseVol = loose * iv
+
+        if loose == 0:
+            looseBox = ""
+        elif looseVol <= 1200:
+            looseBox = "1XS"
+        elif looseVol <= 6000:
+            looseBox = "1S"
+        elif looseVol <= 12000:
+            looseBox = "1Rectangle"
+        elif looseVol <= 18000:
+            looseBox = "1M"
+        elif looseVol <= 48000:
+            looseBox = "1L"
+        else:
+            looseBox = "1XL"
+
+        if cartons > 0 and looseBox:
+            desc = f"{cartons} Commercial Carton + {looseBox}"
+        elif cartons > 0:
+            desc = f"{cartons} Commercial Carton"
+        else:
+            desc = looseBox
+
+        totalC = cartons + (1 if loose > 0 else 0)
+
+        return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
+
+    df[['CartonCount', 'CartonDescription']] = df.apply(calculate_carton_info, axis=1)
 
     # Step 4: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
@@ -77,17 +128,19 @@ if picking_pool_file and sku_master_file:
         current_job.append(issue_no)
         current_vol += vol
 
-    # Assign remaining GIs to current job
+    # Assign remaining GIs
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
     # Combine both groups
     final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
-    # Optional cleanup
+    # Final cleanup and output columns
     final_df = final_df[[
         'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
-        'Qty Commercial Box', 'Total Item Vol', 'Total GI Vol', 'GI Class', 'JobNo'
+        'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol',
+        'CartonCount', 'CartonDescription',
+        'Total GI Vol', 'GI Class', 'JobNo'
     ]].drop_duplicates()
 
     st.success("✅ Processing complete!")
