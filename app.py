@@ -151,12 +151,16 @@ if picking_pool_file and sku_master_file:
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
     # Optional cleanup and reordering columns
-    final_df = final_df[[
-        'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
-        'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol', 'Total GI Vol',
-        'CartonCount', 'CartonDescription', 'GI Class', 'JobNo',
-        'Batch No', 'Commercial Box Count'
-    ]].drop_duplicates()
+    final_df = final_df.drop(columns=[
+        'Item Vol',
+        'Qty Commercial Box',
+        'Qty per Carton',
+        'Total Item Vol',
+        'CartonCount',
+        'CartonDescription',
+        'Total GI Vol'
+    ])
+
 
     st.success("✅ Processing complete!")
 
