@@ -142,8 +142,8 @@ if picking_pool_file and sku_master_file:
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
     # Step 10: Add Batch No (from Storage Location)
-    if 'Storage Location' in final_df.columns:
-        final_df['Batch No'] = final_df['Storage Location']
+    if 'StorageLocation' in final_df.columns:
+        final_df['Batch No'] = final_df['StorageLocation']
     else:
         final_df['Batch No'] = None
 
@@ -152,7 +152,7 @@ if picking_pool_file and sku_master_file:
 
     # Optional cleanup and reordering columns
     final_df = final_df[[
-        'IssueNo', 'SKU', 'ShipToName', 'PickingQty',  'CartonDescription', 'GI Class', 'JobNo',
+        'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'PickingQty',  'CartonDescription', 'GI Class', 'JobNo',
         'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
 
