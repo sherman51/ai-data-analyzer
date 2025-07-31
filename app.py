@@ -13,6 +13,10 @@ sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=
 # User input for filtering GI type (Single-line or Multi-line)
 gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
+# Shipping Date Slicer (add this part)
+start_date = st.sidebar.date_input("From Date", pd.to_datetime("2020-01-01"))
+end_date = st.sidebar.date_input("To Date", pd.to_datetime("2023-12-31"))
+
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
