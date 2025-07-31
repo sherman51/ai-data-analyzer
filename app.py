@@ -201,8 +201,10 @@ else:
 
 import openai
 
-# Optional: set your API key securely
- openai.api_key = st.secrets["OPENAI_API_KEY"]
+if "OPENAI_API_KEY" in st.secrets:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+else:
+    st.warning("⚠️ OpenAI API key not found in secrets. AI Assistant will be disabled.")
 
 # Add a chatbot panel
 st.sidebar.title("🤖 AI Assistant")
