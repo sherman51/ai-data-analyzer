@@ -10,106 +10,85 @@ st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
 sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=["xlsx"])
 
-if picking_pool_file and sku_master_file:
-    # Step 1: Load files
-    picking_pool = pd.read_excel(picking_pool_file)
-    sku_master = pd.read_excel(sku_master_file)
+def calculate_carton_info(row):
+    pq = row.get('PickingQty', 0) or 0
+    qpc = row.get('Qty per Carton', 0) or 0
+    iv = row.get('Item Vol', 0) or 0
 
-    # Step 2: Merge on SKU
-    df = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
+    # Validate inputs
+    if pq == 0 or qpc == 0 or iv == 0:
+        return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
 
-    # Step 3: Clean and filter invalid SKU data
-    df['PickingQty'] = df['PickingQty'].fillna(0)
+    cartons = pq // qpc
+    loose = pq % qpc
 
-    # Identify invalid rows (missing or zero values in key fields)
-    invalid_rows = df[
-        (df['Qty Commercial Box'].isna()) | (df['Qty Commercial Box'] == 0) |
-        (df['Qty per Carton'].isna()) | (df['Qty per Carton'] == 0) |
-        (df['Item Vol'].isna()) | (df['Item Vol'] == 0)
-    ]
-
-    # Get affected GIs and exclude them
-    invalid_gis = invalid_rows['IssueNo'].unique()
-    df = df[~df['IssueNo'].isin(invalid_gis)].copy()
-
-    if len(invalid_gis) > 0:
-        st.warning(f"⚠️ Excluded {len(invalid_gis)} GIs due to missing or invalid SKU data.")
-
-    # Step 4: Calculate Total Item Vol
-    df['Item Vol'] = df['Item Vol'].fillna(0)
-    df['Qty Commercial Box'] = df['Qty Commercial Box'].fillna(1)
-    df['Qty per Carton'] = df['Qty per Carton'].fillna(1)
-
-    df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
-
-    # Step 4.1: Add Carton Info
-    def calculate_carton_info(row):
-        pq = row.get('PickingQty', 0) or 0
-        qpc = row.get('Qty per Carton', 0) or 0
-        qcb = row.get('Qty Commercial Box', 0) or 0
-        iv = row.get('Item Vol', 0) or 0
-
-        valid = all([
-            pq is not None,
-            qpc not in (None, 0),
-            qcb not in (None, 0),
-            iv is not None
-        ])
-
-        if not valid:
-            return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
-
-        cartons = pq // qpc
-        loose = pq - cartons * qpc
+    if loose > 0:
         looseVol = loose * iv
-
-        if loose == 0:
-            looseBox = ""
-        elif looseVol <= 1200:
+        # Only 4 carton sizes for loose: XS, S, Rectangle, L
+        if looseVol <= 1200:
             looseBox = "1XS"
         elif looseVol <= 6000:
             looseBox = "1S"
         elif looseVol <= 12000:
             looseBox = "1Rectangle"
-        elif looseVol <= 18000:
-            looseBox = "1M"
         elif looseVol <= 48000:
             looseBox = "1L"
         else:
-            looseBox = "1XL"
+            # Cap at L for large loose volume
+            looseBox = "1L"
 
-        if cartons > 0 and looseBox:
-            desc = f"{cartons} Commercial Carton + {looseBox}"
-        elif cartons > 0:
-            desc = f"{cartons} Commercial Carton"
-        else:
-            desc = looseBox
+        desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
+        totalC = cartons + 1
+    else:
+        # No loose cartons, just full commercial cartons
+        desc = f"{cartons} Commercial Carton"
+        totalC = cartons
 
-        totalC = cartons + (1 if loose > 0 else 0)
+    return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
-        return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
+if picking_pool_file and sku_master_file:
+    # Step 1: Load files
+    picking_pool = pd.read_excel(picking_pool_file)
+    sku_master = pd.read_excel(sku_master_file)
 
-    df[['CartonCount', 'CartonDescription']] = df.apply(calculate_carton_info, axis=1)
+    # Exclude GIs with missing critical SKU info
+    # First, merge to identify missing data rows
+    merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
+    # Identify IssueNos where any SKU has missing Qty Commercial Box or Qty per Carton or Item Vol
+    missing_info = merged_check[
+        merged_check['Qty Commercial Box'].isna() |
+        merged_check['Qty per Carton'].isna() |
+        merged_check['Item Vol'].isna()
+    ]['IssueNo'].unique()
 
-    # Step 5: Calculate Total GI Vol per IssueNo
+    # Filter out GIs with missing SKU info
+    picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
+
+    # Step 2: Merge again with filtered picking pool
+    df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
+
+    # Step 3: Calculate Total Item Vol
+    df['PickingQty'] = df['PickingQty'].fillna(0)
+    df['Item Vol'] = df['Item Vol'].fillna(0)
+    df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
+    df['Qty per Carton'] = df['Qty per Carton'].replace(0, 1).fillna(1)
+
+    df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
+
+    # Step 4: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 5.1: Classify GI as Bin, Layer, or Oversize
-    df['GI Class'] = df['Total GI Vol'].apply(
-        lambda vol: 'Bin' if vol < 35000 else 'Layer' if vol < 248500 else 'Oversize'
-    )
-
-    # Step 6: Count lines per GI
+    # Step 5: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
 
-    # Step 7: Split into Single-line and Multi-line
+    # Step 6: Split into Single-line and Multi-line
     single_line = df[df['Line Count'] == 1].copy()
     multi_line = df[df['Line Count'] > 1].copy()
 
-    # Step 7A: Assign Jobs to Single-line (by ShipToName, 5 GIs per job)
+    # Step 7A: Assign Jobs to Single-line (grouped by ShipToName, 5 GIs per job)
     single_jobs = []
     job_counter = 1
 
@@ -123,7 +102,7 @@ if picking_pool_file and sku_master_file:
 
     single_line_final = pd.concat(single_jobs)
 
-    # Step 7B: Assign Jobs to Multi-line (GI volume ≤ 600000)
+    # Step 7B: Assign Jobs to Multi-line (grouped by GI volume ≤ 600000)
     multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
     multi_line['JobNo'] = None
     current_job = []
@@ -143,25 +122,41 @@ if picking_pool_file and sku_master_file:
         current_job.append(issue_no)
         current_vol += vol
 
-    # Assign remaining GIs
+    # Assign remaining
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
-    # Step 8: Combine final results
+    # Combine both groups
     final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
-    # Step 9: Final cleanup
+    # Step 8: Add Carton Info columns
+    carton_info = final_df.apply(calculate_carton_info, axis=1)
+    final_df = pd.concat([final_df, carton_info], axis=1)
+
+    # Step 9: Add GI Class column (Bin, Layer, Carton)
+    def classify_gi(row):
+        vol = row['Total GI Vol']
+        if vol < 35000:
+            return 'Bin'
+        elif vol < 248500:
+            return 'Layer'
+        else:
+            return 'Carton'
+
+    final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
+
+    # Optional cleanup and reordering columns
     final_df = final_df[[
         'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
-        'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol',
-        'CartonCount', 'CartonDescription',
-        'Total GI Vol', 'GI Class', 'JobNo'
+        'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol', 'Total GI Vol',
+        'CartonCount', 'CartonDescription', 'GI Class', 'JobNo'
     ]].drop_duplicates()
 
     st.success("✅ Processing complete!")
+
     st.dataframe(final_df.head(20))
 
-    # Step 10: Export
+    # Download button
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         final_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
