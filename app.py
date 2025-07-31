@@ -60,10 +60,26 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
+    # Step 2: Streamlit slicer inputs for filtering data
+    # Filter by SKU
+    sku_options = picking_pool_filtered['SKU'].unique()  # Get unique SKUs from the filtered picking pool
+    selected_sku = st.sidebar.selectbox("Select SKU", ['All'] + list(sku_options))  # Add an option for 'All'
+
+    # Filter by Delivery Date
+    picking_pool_filtered['DeliveryDate'] = pd.to_datetime(picking_pool_filtered['DeliveryDate'], errors='coerce')  # Ensure valid date format
+    date_options = pd.to_datetime(picking_pool_filtered['DeliveryDate'].dropna()).dt.date.unique()  # Unique delivery dates
+    selected_date = st.sidebar.date_input("Select Delivery Date", min_value=min(date_options), max_value=max(date_options), value=min(date_options))
+
+    # Apply filter based on user selection
+    if selected_sku != 'All':
+        picking_pool_filtered = picking_pool_filtered[picking_pool_filtered['SKU'] == selected_sku]
+
+    picking_pool_filtered = picking_pool_filtered[picking_pool_filtered['DeliveryDate'].dt.date == selected_date]
+
+    # Step 3: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Step 3: Calculate Total Item Vol
+    # Step 4: Calculate Total Item Vol
     df['PickingQty'] = df['PickingQty'].fillna(0)
     df['Item Vol'] = df['Item Vol'].fillna(0)
     df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
@@ -71,16 +87,16 @@ if picking_pool_file and sku_master_file:
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    # Step 4: Calculate Total GI Vol per IssueNo
+    # Step 5: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 5: Count lines per GI
+    # Step 6: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
 
-    # Step 6: Split into Single-line and Multi-line
+    # Step 7: Split into Single-line and Multi-line
     single_line = df[df['Line Count'] == 1].copy()
     multi_line = df[df['Line Count'] > 1].copy()
 
@@ -151,14 +167,14 @@ if picking_pool_file and sku_master_file:
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
     # Optional cleanup and reordering columns
-    final_df = final_df[[
+    final_df = final_df[[ 
         'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
         'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
 
-
     st.success("✅ Processing complete!")
 
+    # Show the filtered data (first 20 rows for preview)
     st.dataframe(final_df.head(20))
 
     # Download button
