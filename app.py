@@ -61,20 +61,8 @@ if picking_pool_file and sku_master_file:
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
     # Step 2: Streamlit slicer inputs for filtering data
-    # Filter by SKU
-    sku_options = picking_pool_filtered['SKU'].unique()  # Get unique SKUs from the filtered picking pool
-    selected_sku = st.sidebar.selectbox("Select SKU", ['All'] + list(sku_options))  # Add an option for 'All'
-
-    # Filter by Delivery Date
-    picking_pool_filtered['DeliveryDate'] = pd.to_datetime(picking_pool_filtered['DeliveryDate'], errors='coerce')  # Ensure valid date format
-    date_options = pd.to_datetime(picking_pool_filtered['DeliveryDate'].dropna()).dt.date.unique()  # Unique delivery dates
-    selected_date = st.sidebar.date_input("Select Delivery Date", min_value=min(date_options), max_value=max(date_options), value=min(date_options))
-
-    # Apply filter based on user selection
-    if selected_sku != 'All':
-        picking_pool_filtered = picking_pool_filtered[picking_pool_filtered['SKU'] == selected_sku]
-
-    picking_pool_filtered = picking_pool_filtered[picking_pool_filtered['DeliveryDate'].dt.date == selected_date]
+    # Filter by Single-line / Multi-line GI
+    gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
     # Step 3: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
@@ -171,6 +159,12 @@ if picking_pool_file and sku_master_file:
         'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
         'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
+
+    # Apply the GI Type Filter
+    if gi_type == "Single-line":
+        final_df = final_df[final_df['Line Count'] == 1]
+    elif gi_type == "Multi-line":
+        final_df = final_df[final_df['Line Count'] > 1]
 
     st.success("✅ Processing complete!")
 
