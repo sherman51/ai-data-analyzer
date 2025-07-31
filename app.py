@@ -13,9 +13,16 @@ sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=
 # User input for filtering GI type (Single-line or Multi-line)
 gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
-# Shipping Date Slicer (add this part)
-start_date = st.sidebar.date_input("From Date", pd.to_datetime("2020-01-01"))
-end_date = st.sidebar.date_input("To Date", pd.to_datetime("2023-12-31"))
+# Date Range Slicer (Single date range picker)
+date_range = st.sidebar.date_input(
+    "Select Date Range",
+    value=(pd.to_datetime("2020-01-01"), pd.to_datetime("2023-12-31")),
+    min_value=pd.to_datetime("2000-01-01"),
+    max_value=pd.to_datetime("2023-12-31"),
+    key="date_range"
+)
+
+start_date, end_date = date_range
 
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
@@ -67,10 +74,17 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
+    # Step 2: Filter picking pool by selected date range
+    picking_pool_filtered['DeliveryDate'] = pd.to_datetime(picking_pool_filtered['DeliveryDate'], errors='coerce')
+    picking_pool_filtered = picking_pool_filtered[
+        (picking_pool_filtered['DeliveryDate'] >= pd.to_datetime(start_date)) & 
+        (picking_pool_filtered['DeliveryDate'] <= pd.to_datetime(end_date))
+    ]
+
+    # Step 3: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Step 3: Calculate Total Item Vol
+    # Step 4: Calculate Total Item Vol
     df['PickingQty'] = df['PickingQty'].fillna(0)
     df['Item Vol'] = df['Item Vol'].fillna(0)
     df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
@@ -78,16 +92,16 @@ if picking_pool_file and sku_master_file:
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    # Step 4: Calculate Total GI Vol per IssueNo
+    # Step 5: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 5: Count lines per GI
+    # Step 6: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
 
-    # Step 6: Split into Single-line and Multi-line
+    # Step 7: Split into Single-line and Multi-line
     single_line = df[df['Line Count'] == 1].copy()
     multi_line = df[df['Line Count'] > 1].copy()
 
