@@ -203,9 +203,13 @@ import openai
 import streamlit as st
 import os
 
-# Initialize OpenAI client with the API key from Streamlit secrets
-openai.api_key = st.secrets["API key"]
+import openai
+import streamlit as st
 
+# Retrieve OpenAI API key from Streamlit secrets (this is secure)
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# Your other Streamlit and OpenAI code here
 st.markdown("## 🤖 AI Assistant")
 st.info("You can ask questions like:\n- How many SKUs are in the data?\n- What’s the total PickingQty?\n- What’s the average item volume?\n- Suggest optimization for multi-line GIs")
 
@@ -239,6 +243,3 @@ if st.button("Ask AI") and user_query:
             st.markdown(ai_reply)
         except Exception as e:
             st.error(f"AI Error: {e}")
-
-
-
