@@ -14,22 +14,6 @@ sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=
 # User input for filtering GI type (Single-line or Multi-line)
 gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
-# Define Chatbot function
-def chatbot(query, final_df):
-    # Example responses
-    if 'reprocess' in query.lower():
-        return "Sure! You can filter the data by Delivery Date, GI Type, or other options. What would you like to adjust?"
-    
-    if 'total carton count' in query.lower():
-        total_cartons = final_df['CartonCount'].sum()
-        return f"The total carton count is {total_cartons}."
-
-    if 'gi count' in query.lower():
-        gi_count = final_df['IssueNo'].nunique()
-        return f"There are {gi_count} unique GI numbers in the dataset."
-
-    return "I'm sorry, I didn't understand that. Please ask about reprocessing or a specific query on the data."
-
 # Function to calculate Carton Info
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
@@ -62,6 +46,22 @@ def calculate_carton_info(row):
         totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
+
+# Define Chatbot function
+def chatbot(query, final_df):
+    # Example responses
+    if 'reprocess' in query.lower():
+        return "Sure! You can filter the data by Delivery Date, GI Type, or other options. What would you like to adjust?"
+    
+    if 'total carton count' in query.lower():
+        total_cartons = final_df['CartonCount'].sum()
+        return f"The total carton count is {total_cartons}."
+
+    if 'gi count' in query.lower():
+        gi_count = final_df['IssueNo'].nunique()
+        return f"There are {gi_count} unique GI numbers in the dataset."
+
+    return "I'm sorry, I didn't understand that. Please ask about reprocessing or a specific query on the data."
 
 # If both files are uploaded
 if picking_pool_file and sku_master_file:
@@ -155,13 +155,13 @@ if picking_pool_file and sku_master_file:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # Chatbot Section
-    st.sidebar.header("💬 Chatbot Interaction")
-    user_query = st.sidebar.text_input("Ask a question or request reprocessing:")
+    # Chatbot Section - Ensure it's outside of download interaction
+    st.subheader("💬 Chatbot Interaction")
+    user_query = st.text_input("Ask a question or request reprocessing:")
 
     if user_query:
         response = chatbot(user_query, final_df)
-        st.sidebar.write(f"🤖 Chatbot: {response}")
+        st.write(f"🤖 Chatbot: {response}")
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
