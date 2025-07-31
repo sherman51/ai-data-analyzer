@@ -152,9 +152,7 @@ if picking_pool_file and sku_master_file:
 
     # Optional cleanup and reordering columns
     final_df = final_df[[
-        'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
-        'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol', 'Total GI Vol',
-        'CartonCount', 'CartonDescription', 'GI Class', 'JobNo',
+        'IssueNo', 'SKU', 'ShipToName', 'PickingQty',  'CartonDescription', 'GI Class', 'JobNo',
         'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
 
