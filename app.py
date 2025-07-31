@@ -199,59 +199,44 @@ if picking_pool_file and sku_master_file:
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
 
-import openai
+import os
+from openai import OpenAI
 
-# Optional: set your API key securely
-# openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Initialize OpenAI client
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Add a chatbot panel
-st.sidebar.title("🤖 AI Assistant")
-show_chat = st.sidebar.checkbox("Open Chat Assistant")
+st.markdown("## 🤖 AI Assistant")
+st.info("You can ask questions like:\n- How many SKUs are in the data?\n- What’s the total PickingQty?\n- What’s the average item volume?\n- Suggest optimization for multi-line GIs")
 
-if show_chat:
-    st.subheader("🤖 Ask me about the pick ticket data!")
+user_query = st.text_area("Ask a question about your GI data (natural language)", height=100)
 
-    # Load uploaded data into memory
-    if 'final_df' in locals():
-        chat_history = st.session_state.get("chat_history", [])
+# Optionally convert top 100 rows to CSV for context (avoid flooding prompt)
+if 'final_df' in locals():
+    data_sample = final_df.head(100).to_csv(index=False)
+else:
+    data_sample = "No data available."
 
-        for msg in chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        prompt = st.chat_input("Ask a question about the pick ticket data...")
-        if prompt:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            # You can build a prompt using the dataframe (e.g., summary)
-            df_info = final_df.describe(include='all').to_string()
-
-            full_prompt = f"""
-You are a data assistant. Answer questions about the pick ticket data.
-Here is the summary of the data:
-{df_info}
-
-User question: {prompt}
-"""
-
-            # Call OpenAI API (requires valid key and setup)
-            response = openai.ChatCompletion.create(
+if st.button("Ask AI") and user_query:
+    with st.spinner("Thinking..."):
+        try:
+            response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
-                    {"role": "user", "content": full_prompt}
+                    {
+                        "role": "system",
+                        "content": (
+                            "You're a data analyst assistant. The user will ask questions about a DataFrame "
+                            "used to generate warehouse pick tickets based on GI data. Here's the top part of the data:\n\n"
+                            f"{data_sample}"
+                        )
+                    },
+                    {"role": "user", "content": user_query}
                 ]
             )
+            ai_reply = response.choices[0].message.content
+            st.success("AI Response:")
+            st.markdown(ai_reply)
+        except Exception as e:
+            st.error(f"AI
 
-            answer = response['choices'][0]['message']['content']
-
-            with st.chat_message("assistant"):
-                st.markdown(answer)
-
-            chat_history.append({"role": "user", "content": prompt})
-            chat_history.append({"role": "assistant", "content": answer})
-            st.session_state["chat_history"] = chat_history
-    else:
-        st.warning("Please upload files first to enable the assistant.")
 
