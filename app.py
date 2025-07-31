@@ -198,3 +198,60 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
+import openai
+
+# Optional: set your API key securely
+# openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# Add a chatbot panel
+st.sidebar.title("🤖 AI Assistant")
+show_chat = st.sidebar.checkbox("Open Chat Assistant")
+
+if show_chat:
+    st.subheader("🤖 Ask me about the pick ticket data!")
+
+    # Load uploaded data into memory
+    if 'final_df' in locals():
+        chat_history = st.session_state.get("chat_history", [])
+
+        for msg in chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        prompt = st.chat_input("Ask a question about the pick ticket data...")
+        if prompt:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            # You can build a prompt using the dataframe (e.g., summary)
+            df_info = final_df.describe(include='all').to_string()
+
+            full_prompt = f"""
+You are a data assistant. Answer questions about the pick ticket data.
+Here is the summary of the data:
+{df_info}
+
+User question: {prompt}
+"""
+
+            # Call OpenAI API (requires valid key and setup)
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
+                    {"role": "user", "content": full_prompt}
+                ]
+            )
+
+            answer = response['choices'][0]['message']['content']
+
+            with st.chat_message("assistant"):
+                st.markdown(answer)
+
+            chat_history.append({"role": "user", "content": prompt})
+            chat_history.append({"role": "assistant", "content": answer})
+            st.session_state["chat_history"] = chat_history
+    else:
+        st.warning("Please upload files first to enable the assistant.")
+
