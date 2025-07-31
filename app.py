@@ -140,7 +140,7 @@ if picking_pool_file and sku_master_file:
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
     # Step 10: Add Batch No column from Storage Location, and Commercial Box Count column
-    final_df['Batch No'] = final_df['Storage Location']
+    final_df['Batch No'] = final_df['StorageLocation']
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
     # Step 11: Drop unwanted columns
