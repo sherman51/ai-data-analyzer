@@ -13,8 +13,8 @@ sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=
 # User input for filtering GI type (Single-line or Multi-line)
 gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
-# Date slicer to filter data by date range
-st.sidebar.header("🗓️ Select Date Range")
+# Date slicer to filter data by delivery date range
+st.sidebar.header("🗓️ Select Delivery Date Range")
 date_range = st.sidebar.date_input("Select Date Range", [], min_value=None, max_value=None)
 
 def calculate_carton_info(row):
@@ -57,13 +57,16 @@ if picking_pool_file and sku_master_file:
     picking_pool = pd.read_excel(picking_pool_file)
     sku_master = pd.read_excel(sku_master_file)
 
-    # Step 2: Ensure the Date Range Filter is applied
-    if date_range:
-        picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
-        start_date, end_date = date_range
-        picking_pool = picking_pool[(picking_pool['DeliveryDate'] >= start_date) & (picking_pool['DeliveryDate'] <= end_date)]
+    # Ensure DeliveryDate is in datetime format
+    picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
 
-    # Exclude GIs with missing critical SKU info
+    # Step 2: Apply the Date Range Filter
+    if date_range:
+        start_date, end_date = date_range
+        picking_pool = picking_pool[(picking_pool['DeliveryDate'] >= pd.to_datetime(start_date)) &
+                                    (picking_pool['DeliveryDate'] <= pd.to_datetime(end_date))]
+
+    # Step 3: Exclude GIs with missing critical SKU info
     merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
     missing_info = merged_check[
         merged_check['Qty Commercial Box'].isna() |
@@ -73,10 +76,10 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 3: Merge filtered picking pool and sku_master (keep Storage Location)
+    # Step 4: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Step 4: Calculate Total Item Vol
+    # Step 5: Calculate Total Item Vol
     df['PickingQty'] = df['PickingQty'].fillna(0)
     df['Item Vol'] = df['Item Vol'].fillna(0)
     df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
@@ -84,72 +87,28 @@ if picking_pool_file and sku_master_file:
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    # Step 5: Calculate Total GI Vol per IssueNo
+    # Step 6: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 6: Count lines per GI
+    # Step 7: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
 
-    # Step 7A: Assign Jobs to Single-line (grouped by ShipToName, 5 GIs per job)
-    single_jobs = []
-    job_counter = 1
-
-    for name, group in single_line.groupby('ShipToName'):
-        group = group.copy()
-        group = group.sort_values('IssueNo')
-        group['GI_Group_Index'] = group.groupby('IssueNo').ngroup()
-        group['JobNo'] = group['GI_Group_Index'].apply(lambda x: f"Job{str(job_counter + x // 5).zfill(3)}")
-        job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
-        single_jobs.append(group)
-
-    single_line_final = pd.concat(single_jobs)
-
-    # Step 7B: Assign Jobs to Multi-line (grouped by GI volume ≤ 600000)
-    multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
-    multi_line['JobNo'] = None
-    current_job = []
-    current_vol = 0
-    job_id = job_counter
-
-    for _, row in multi_summary.iterrows():
-        issue_no = row['IssueNo']
-        vol = row['Total GI Vol']
-        if current_vol + vol > 600000:
-            # Assign JobNo to the GIs in the current job
-            for gi in current_job:
-                multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
-            job_id += 1
-            current_job = []
-            current_vol = 0
-
-        current_job.append(issue_no)
-        current_vol += vol
-
-    # Assign remaining GIs to jobs
-    for gi in current_job:
-        multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
-
-    # Combine both groups into final_df
-    final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
-
-    # -------- Ensure 'Line Count' exists before filtering --------
-    if 'Line Count' in final_df.columns:
-        # Apply the GI Type Filter based on user input (Single-line or Multi-line)
-        if gi_type == "Single-line":
-            final_df = final_df[final_df['Line Count'] == 1]
-        elif gi_type == "Multi-line":
-            final_df = final_df[final_df['Line Count'] > 1]
+    # Step 8: Filter Single-line and Multi-line
+    if gi_type == "Single-line":
+        final_df = df[df['Line Count'] == 1]
+    elif gi_type == "Multi-line":
+        final_df = df[df['Line Count'] > 1]
     else:
-        st.error("Column 'Line Count' not found. Please check the data processing steps.")
+        final_df = df.copy()  # Include all GIs for "All" option
 
-    # Step 8: Add Carton Info columns
+    # Step 9: Add Carton Info columns
     carton_info = final_df.apply(calculate_carton_info, axis=1)
     final_df = pd.concat([final_df, carton_info], axis=1)
 
-    # Step 9: Add GI Class column (Bin or Layer)
+    # Step 10: Add GI Class column (Bin or Layer)
     def classify_gi(row):
         vol = row['Total GI Vol']
         if vol < 600000:  # Cap volume at 600,000 for a "Bin" classification
@@ -159,13 +118,13 @@ if picking_pool_file and sku_master_file:
 
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
-    # Step 10: Add Batch No (from Storage Location)
+    # Step 11: Add Batch No (from Storage Location)
     if 'StorageLocation' in final_df.columns:
         final_df['Batch No'] = final_df['StorageLocation']
     else:
         final_df['Batch No'] = None
 
-    # Step 11: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
+    # Step 12: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
     # Optional cleanup and reordering columns
