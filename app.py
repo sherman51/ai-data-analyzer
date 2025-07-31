@@ -201,11 +201,7 @@ else:
 
 
 # --- OpenAI API key setup with safe fallback ---
-if "OPENAI_API_KEY" in st.secrets:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-else:
-    openai.api_key = None
-    st.sidebar.warning("⚠️ OpenAI API key not found in secrets. AI Assistant will be disabled.")
+
 
 # --- AI Assistant chatbot panel in sidebar ---
 st.sidebar.title("🤖 AI Assistant")
