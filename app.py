@@ -24,6 +24,7 @@ def calculate_carton_info(row):
 
     if loose > 0:
         looseVol = loose * iv
+        # Only 4 carton sizes for loose: XS, S, Rectangle, L
         if looseVol <= 1200:
             looseBox = "1XS"
         elif looseVol <= 6000:
@@ -33,11 +34,12 @@ def calculate_carton_info(row):
         elif looseVol <= 48000:
             looseBox = "1L"
         else:
-            looseBox = "1L"
+            looseBox = "1L"  # Cap at L
 
         desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
         totalC = cartons + 1
     else:
+        # No loose cartons, just full commercial cartons
         desc = f"{cartons} Commercial Carton"
         totalC = cartons
 
@@ -58,7 +60,7 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Merge again with filtered picking pool
+    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
     # Step 3: Calculate Total Item Vol
@@ -139,31 +141,22 @@ if picking_pool_file and sku_master_file:
 
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
-    # Step 10: Add Batch No column from Storage Location, and Commercial Box Count column
-    final_df['Batch No'] = final_df['StorageLocation']
+    # Step 10: Add Batch No (from Storage Location)
+    if 'Storage Location' in final_df.columns:
+        final_df['Batch No'] = final_df['Storage Location']
+    else:
+        final_df['Batch No'] = None
+
+    # Step 11: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    # Step 11: Drop unwanted columns
-    final_df = final_df.drop(columns=[
-        'Item Vol',
-        'Qty Commercial Box',
-        'Qty per Carton',
-        'Total Item Vol',
-        'CartonCount',
-        'CartonDescription',
-        'Total GI Vol'
-    ])
-
-    # Optional cleanup and reorder columns
-    cols_order = [
-        'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Batch No',
-        'Commercial Box Count', 'GI Class', 'JobNo'
-    ]
-
-    # Keep only existing columns to avoid errors if any missing
-    cols_order = [col for col in cols_order if col in final_df.columns]
-
-    final_df = final_df[cols_order].drop_duplicates()
+    # Optional cleanup and reordering columns
+    final_df = final_df[[
+        'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
+        'Qty Commercial Box', 'Qty per Carton', 'Total Item Vol', 'Total GI Vol',
+        'CartonCount', 'CartonDescription', 'GI Class', 'JobNo',
+        'Batch No', 'Commercial Box Count'
+    ]].drop_duplicates()
 
     st.success("✅ Processing complete!")
 
