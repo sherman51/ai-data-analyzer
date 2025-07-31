@@ -198,14 +198,20 @@ User question: {prompt}
 """
 
             try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
-                        {"role": "user", "content": full_prompt}
-                    ]
-                )
-                answer = response['choices'][0]['message']['content']
+from openai import OpenAI
+
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
+                    {"role": "user", "content": full_prompt}
+                ]
+            )
+             
+            answer = response.choices[0].message.content
+
             except Exception as e:
                 answer = f"❌ Failed to call OpenAI API: {e}"
 
