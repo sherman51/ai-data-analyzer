@@ -198,13 +198,13 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
+    
 import openai
 import streamlit as st
 import os
 
-# Initialize OpenAI client
-client = OpenAI(api_key=st.secrets["secret"])
+# Initialize OpenAI client with the API key from Streamlit secrets
+openai.api_key = st.secrets["API key"]
 
 st.markdown("## 🤖 AI Assistant")
 st.info("You can ask questions like:\n- How many SKUs are in the data?\n- What’s the total PickingQty?\n- What’s the average item volume?\n- Suggest optimization for multi-line GIs")
@@ -220,7 +220,7 @@ else:
 if st.button("Ask AI") and user_query:
     with st.spinner("Thinking..."):
         try:
-            response = client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {
@@ -234,10 +234,11 @@ if st.button("Ask AI") and user_query:
                     {"role": "user", "content": user_query}
                 ]
             )
-            ai_reply = response.choices[0].message.content
+            ai_reply = response['choices'][0]['message']['content']
             st.success("AI Response:")
             st.markdown(ai_reply)
         except Exception as e:
-            st.error(f"AI
+            st.error(f"AI Error: {e}")
+
 
 
