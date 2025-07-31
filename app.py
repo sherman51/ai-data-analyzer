@@ -10,6 +10,9 @@ st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
 sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=["xlsx"])
 
+# User input for filtering GI type (Single-line or Multi-line)
+gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
+
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
@@ -60,14 +63,10 @@ if picking_pool_file and sku_master_file:
 
     picking_pool_filtered = picking_pool[~picking_pool['IssueNo'].isin(missing_info)]
 
-    # Step 2: Streamlit slicer inputs for filtering data
-    # Filter by Single-line / Multi-line GI
-    gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
-
-    # Step 3: Merge filtered picking pool and sku_master (keep Storage Location)
+    # Step 2: Merge filtered picking pool and sku_master (keep Storage Location)
     df = picking_pool_filtered.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
 
-    # Step 4: Calculate Total Item Vol
+    # Step 3: Calculate Total Item Vol
     df['PickingQty'] = df['PickingQty'].fillna(0)
     df['Item Vol'] = df['Item Vol'].fillna(0)
     df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
@@ -75,16 +74,16 @@ if picking_pool_file and sku_master_file:
 
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-    # Step 5: Calculate Total GI Vol per IssueNo
+    # Step 4: Calculate Total GI Vol per IssueNo
     gi_volume = df.groupby('IssueNo')['Total Item Vol'].sum().reset_index()
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
-    # Step 6: Count lines per GI
+    # Step 5: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
 
-    # Step 7: Split into Single-line and Multi-line
+    # Step 6: Split into Single-line and Multi-line
     single_line = df[df['Line Count'] == 1].copy()
     multi_line = df[df['Line Count'] > 1].copy()
 
@@ -126,8 +125,18 @@ if picking_pool_file and sku_master_file:
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
-    # Combine both groups
+    # Combine both groups into final_df
     final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
+
+    # -------- Ensure 'Line Count' exists before filtering --------
+    if 'Line Count' in final_df.columns:
+        # Apply the GI Type Filter based on user input (Single-line or Multi-line)
+        if gi_type == "Single-line":
+            final_df = final_df[final_df['Line Count'] == 1]
+        elif gi_type == "Multi-line":
+            final_df = final_df[final_df['Line Count'] > 1]
+    else:
+        st.error("Column 'Line Count' not found. Please check the data processing steps.")
 
     # Step 8: Add Carton Info columns
     carton_info = final_df.apply(calculate_carton_info, axis=1)
@@ -160,12 +169,7 @@ if picking_pool_file and sku_master_file:
         'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
 
-    # Apply the GI Type Filter
-    if gi_type == "Single-line":
-        final_df = final_df[final_df['Line Count'] == 1]
-    elif gi_type == "Multi-line":
-        final_df = final_df[final_df['Line Count'] > 1]
-
+    # Success message
     st.success("✅ Processing complete!")
 
     # Show the filtered data (first 20 rows for preview)
