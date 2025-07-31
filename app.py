@@ -18,7 +18,6 @@ def calculate_carton_info(row):
     qpc = row.get('Qty per Carton', 0) or 0
     iv = row.get('Item Vol', 0) or 0
 
-    # Validate inputs
     if pq == 0 or qpc == 0 or iv == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
 
@@ -27,7 +26,6 @@ def calculate_carton_info(row):
 
     if loose > 0:
         looseVol = loose * iv
-        # Only 4 carton sizes for loose: XS, S, Rectangle, L
         if looseVol <= 1200:
             looseBox = "1XS"
         elif looseVol <= 6000:
@@ -37,12 +35,11 @@ def calculate_carton_info(row):
         elif looseVol <= 48000:
             looseBox = "1L"
         else:
-            looseBox = "1L"  # Cap at L
+            looseBox = "1L"
 
         desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
         totalC = cartons + 1
     else:
-        # No loose cartons, just full commercial cartons
         desc = f"{cartons} Commercial Carton"
         totalC = cartons
 
@@ -52,6 +49,29 @@ if picking_pool_file and sku_master_file:
     # Step 1: Load files
     picking_pool = pd.read_excel(picking_pool_file)
     sku_master = pd.read_excel(sku_master_file)
+
+    # Convert DeliveryDate to datetime and drop rows with invalid dates
+    picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
+    picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
+
+    # Sidebar date filter
+    min_date = picking_pool['DeliveryDate'].min()
+    max_date = picking_pool['DeliveryDate'].max()
+
+    delivery_date_range = st.sidebar.date_input(
+        "📅 Filter by Delivery Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+
+    # Apply delivery date filter
+    if isinstance(delivery_date_range, tuple) and len(delivery_date_range) == 2:
+        start_date, end_date = pd.to_datetime(delivery_date_range[0]), pd.to_datetime(delivery_date_range[1])
+        picking_pool = picking_pool[
+            (picking_pool['DeliveryDate'] >= start_date) &
+            (picking_pool['DeliveryDate'] <= end_date)
+        ]
 
     # Exclude GIs with missing critical SKU info
     merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
@@ -112,7 +132,6 @@ if picking_pool_file and sku_master_file:
         issue_no = row['IssueNo']
         vol = row['Total GI Vol']
         if current_vol + vol > 600000:
-            # Assign JobNo to the GIs in the current job
             for gi in current_job:
                 multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
             job_id += 1
@@ -122,16 +141,14 @@ if picking_pool_file and sku_master_file:
         current_job.append(issue_no)
         current_vol += vol
 
-    # Assign remaining GIs to jobs
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
-    # Combine both groups into final_df
+    # Combine both groups
     final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
-    # -------- Ensure 'Line Count' exists before filtering --------
+    # Filter by GI Type
     if 'Line Count' in final_df.columns:
-        # Apply the GI Type Filter based on user input (Single-line or Multi-line)
         if gi_type == "Single-line":
             final_df = final_df[final_df['Line Count'] == 1]
         elif gi_type == "Multi-line":
@@ -146,35 +163,27 @@ if picking_pool_file and sku_master_file:
     # Step 9: Add GI Class column (Bin or Layer)
     def classify_gi(row):
         vol = row['Total GI Vol']
-        if vol < 600000:  # Cap volume at 600,000 for a "Bin" classification
-            return 'Bin'
-        else:
-            return 'Layer'  # If the volume exceeds the threshold, classify as 'Layer'
+        return 'Bin' if vol < 600000 else 'Layer'
 
     final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
 
     # Step 10: Add Batch No (from Storage Location)
-    if 'StorageLocation' in final_df.columns:
-        final_df['Batch No'] = final_df['StorageLocation']
-    else:
-        final_df['Batch No'] = None
+    final_df['Batch No'] = final_df['StorageLocation'] if 'StorageLocation' in final_df.columns else None
 
     # Step 11: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    # Optional cleanup and reordering columns
+    # Step 12: Final cleanup
     final_df = final_df[[ 
         'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
         'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
     ]].drop_duplicates()
 
-    # Success message
+    # Display result
     st.success("✅ Processing complete!")
-
-    # Show the filtered data (first 20 rows for preview)
     st.dataframe(final_df.head(20))
 
-    # Download button
+    # Download section
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         final_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
