@@ -127,30 +127,38 @@ if picking_pool_file and sku_master_file:
     # Step 12: Calculate Commercial Box Count = PickingQty / Qty Commercial Box
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    # Optional cleanup and reordering columns
-    final_df = final_df[[ 
+    # Checking for missing columns before selecting
+    required_columns = [
         'IssueNo', 'DeliveryDate', 'SKU', 'ShipToName', 'Location_x', 'PickingQty',
         'Total GI Vol', 'CartonDescription', 'GI Class', 'JobNo', 'Batch No', 'Commercial Box Count'
-    ]].drop_duplicates()
+    ]
+    
+    missing_columns = [col for col in required_columns if col not in final_df.columns]
 
-    # Success message
-    st.success("✅ Processing complete!")
+    if missing_columns:
+        st.error(f"Missing columns: {', '.join(missing_columns)}")
+    else:
+        # Optional cleanup and reordering columns
+        final_df = final_df[required_columns].drop_duplicates()
 
-    # Show the filtered data (first 20 rows for preview)
-    st.dataframe(final_df.head(20))
+        # Success message
+        st.success("✅ Processing complete!")
 
-    # Download button
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        final_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
-    output.seek(0)
+        # Show the filtered data (first 20 rows for preview)
+        st.dataframe(final_df.head(20))
 
-    st.download_button(
-        label="⬇️ Download Master Pick Ticket Excel",
-        data=output,
-        file_name="MasterPickTicket.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        # Download button
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            final_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
+        output.seek(0)
+
+        st.download_button(
+            label="⬇️ Download Master Pick Ticket Excel",
+            data=output,
+            file_name="MasterPickTicket.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
