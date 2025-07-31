@@ -30,6 +30,11 @@ if picking_pool_file and sku_master_file:
     gi_volume = gi_volume.rename(columns={'Total Item Vol': 'Total GI Vol'})
     df = df.merge(gi_volume, on='IssueNo', how='left')
 
+    # Step 4.1: Classify GI as Bin, Layer, or Oversize
+    df['GI Class'] = df['Total GI Vol'].apply(
+        lambda vol: 'Bin' if vol < 35000 else 'Layer' if vol < 248500 else 'Oversize'
+    )
+
     # Step 5: Count lines per GI
     line_counts = df.groupby('IssueNo').size().reset_index(name='Line Count')
     df = df.merge(line_counts, on='IssueNo', how='left')
@@ -72,7 +77,7 @@ if picking_pool_file and sku_master_file:
         current_job.append(issue_no)
         current_vol += vol
 
-    # Assign remaining
+    # Assign remaining GIs to current job
     for gi in current_job:
         multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
 
@@ -82,7 +87,7 @@ if picking_pool_file and sku_master_file:
     # Optional cleanup
     final_df = final_df[[
         'IssueNo', 'SKU', 'ShipToName', 'PickingQty', 'Item Vol',
-        'Qty Commercial Box', 'Total Item Vol', 'Total GI Vol', 'JobNo'
+        'Qty Commercial Box', 'Total Item Vol', 'Total GI Vol', 'GI Class', 'JobNo'
     ]].drop_duplicates()
 
     st.success("✅ Processing complete!")
