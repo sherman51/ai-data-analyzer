@@ -34,8 +34,8 @@ def calculate_carton_info(row):
         elif looseVol <= 48000:
             looseBox = "1L"
         else:
-            # Cap at L for large loose volume
-            looseBox = "1L"
+            looseBox = "1L"  # Cap at L
+
 
         desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
         totalC = cartons + 1
