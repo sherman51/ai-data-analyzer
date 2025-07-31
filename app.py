@@ -143,12 +143,16 @@ if picking_pool_file and sku_master_file:
     # Step 15: Add Commercial Box Count
     final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-    # Step 16: Select final output columns
+    # Step 16: Safely select final output columns
     cols_order = [
         'IssueNo', 'SKU', 'ShipToName', 'Delivery Date', 'PickingQty',
         'Batch No', 'Commercial Box Count', 'GI Class', 'JobNo'
     ]
-    final_df_display = final_df[cols_order].drop_duplicates()
+    
+    # Keep only the columns that actually exist
+    existing_cols = [col for col in cols_order if col in final_df.columns]
+    final_df_display = final_df[existing_cols].drop_duplicates()
+
 
     st.success("✅ Processing complete!")
     st.dataframe(final_df_display.head(20))
