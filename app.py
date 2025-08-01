@@ -60,6 +60,13 @@ if picking_pool_file and sku_master_file:
         # Filter valid delivery dates
         picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
+
+        # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
+        picking_pool = picking_pool[
+            (picking_pool['Zone'] == 'A') &
+            (picking_pool['Location'].astype(str).str.startswith('A-') | picking_pool['Location'].astype(str).str.startswith('SOFT-'))
+        ]
+
         
         # Sidebar date input
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
@@ -135,30 +142,32 @@ if picking_pool_file and sku_master_file:
         # Carton Info + GI Class
         final_df = pd.concat([final_df, final_df.apply(calculate_carton_info, axis=1)], axis=1)
         final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
+        # 🆕 Add running index per GI
+        final_df['GI Index'] = final_df.groupby('IssueNo').cumcount() + 1
+        # 🆕 Merge GI Class and Index into "Type" column (e.g., "Bin 1", "Layer 2")
+        final_df['Type'] = final_df['GI Class'] + ' ' + final_df['GI Index'].astype(str)
+
 
         # Extra columns
         final_df['Batch No'] = final_df.get('StorageLocation')
         final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
         
-        # Final output
         output_df = final_df[[ 
-            'IssueNo',                # 1
-            'SKU',                    # 2
-            'Location_x',             # 3
-            'SKUDescription',         # 4
-            'Batch No',               # 5
-            'PickingQty',             # 6
-            'Commercial Box Count',   # 7
-            'DeliveryDate',           # 8
-            'ShipToName',             # 9
-            'GI Class',               # 10
-            'JobNo',                  # 11            
-            'CartonDescription'       # 12
-            
-            
-            
+            'IssueNo',
+            'SKU',
+            'Location_x',
+            'SKUDescription',
+            'Batch No',
+            'PickingQty',
+            'Commercial Box Count',
+            'DeliveryDate',
+            'ShipToName',
+            'Type',             # 🆕 Merged column: GI Class + GI Index
+            'JobNo',            
+            'CartonDescription'       
         ]].drop_duplicates()
+
 
 
         st.success("✅ Processing complete!")
