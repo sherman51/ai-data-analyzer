@@ -140,21 +140,24 @@ if picking_pool_file and sku_master_file:
         final_df['Batch No'] = final_df.get('StorageLocation')
         final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-        # Final output
+        
         # Final output
         output_df = final_df[[ 
             'IssueNo',                # 1
-            'DeliveryDate',           # 8
             'SKU',                    # 2
-            'ShipToName',             # 9
             'Location_x',             # 3
             'SKUDescription',         # 4
-            'PickingQty',             # 6
-            'CartonDescription',      # 12
-            'GI Class',               # 10
-            'JobNo',                  # 11
             'Batch No',               # 5
+            'PickingQty',             # 6
             'Commercial Box Count'    # 7
+            'DeliveryDate',           # 8
+            'ShipToName',             # 9
+            'GI Class',               # 10
+            'JobNo',                  # 11            
+            'CartonDescription',      # 12
+            
+            
+            
         ]].drop_duplicates()
 
 
