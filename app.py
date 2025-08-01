@@ -35,7 +35,7 @@ def calculate_carton_info(row):
         (1200, "1XS"),
         (6000, "1S"),
         (12000, "1Rectangle"),
-        (48000, "1L"),
+        (48000, "1L")
     ]
 
     if loose > 0:
