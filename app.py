@@ -193,7 +193,7 @@ if picking_pool_file and sku_master_file:
             'JobNo',
             'CartonDescription',
             'LocationType',
-            'Total Item Vol'
+            'Total GI Vol'
         ]].drop_duplicates()
 
         st.success("✅ Processing complete!")
