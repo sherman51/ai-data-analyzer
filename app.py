@@ -23,24 +23,30 @@ def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
     iv = row.get('Item Vol', 0) or 0
+    total_vol = row.get('Total Item Vol', 0) or 0  # get total volume directly
 
-    if pq == 0 or qpc == 0 or iv == 0:
+    if pq == 0 or qpc == 0 or iv == 0 or total_vol == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
 
-    cartons = pq // qpc
+    cartons = int(pq // qpc)
     loose = pq % qpc
 
-    # Define carton size thresholds (volume in cc)
     carton_sizes = [
         (1200, "1XS"),
         (6000, "1S"),
         (12000, "1Rectangle"),
-        (48000, "1L")
+        (48000, "1L"),
+        (float('inf'), "1XLL")
     ]
 
     if loose > 0:
-        looseVol = loose * iv
-        # Select the smallest carton that can fit the loose volume
+        if loose < 1:
+            # For fractional loose qty, use Total Item Vol directly
+            looseVol = total_vol
+        else:
+            # For loose >=1, calculate loose volume normally
+            looseVol = loose * iv
+
         looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
 
         desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
@@ -50,6 +56,8 @@ def calculate_carton_info(row):
         totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
+
+
 
 def classify_gi(volume):
     if volume < 35000:
