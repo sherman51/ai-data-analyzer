@@ -25,7 +25,7 @@ def calculate_carton_info(row):
     iv = row.get('Item Vol', 0) or 0
     qpco = row.get('Qty Commercial Box',0) or 0
 
-    if pq == 0 or qpc == 0 or iv == 0 or total_vol == 0:
+    if pq == 0 or qpc == 0 or iv == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
 
     cartons = int(pq // qpc)
