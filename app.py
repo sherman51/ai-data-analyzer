@@ -53,7 +53,13 @@ def calculate_carton_info(row):
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
 def classify_gi(volume):
-    return 'Bin' if volume < 600000 else 'Layer'
+    if volume < 35000:
+        return 'Bin'
+    elif volume < 248500:
+        return 'Layer'
+    else:
+        return 'Pick by Orders'
+
 
 # ------------------------ DATA PROCESSING ------------------------
 if picking_pool_file and sku_master_file:
