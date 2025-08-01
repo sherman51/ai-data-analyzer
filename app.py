@@ -118,6 +118,14 @@ if picking_pool_file and sku_master_file:
         # STEP 1: Classify GI (e.g., Bin or Layer)
         df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
 
+        # 🚫 Exclude GIs classified as "Pick by Orders"
+        df = df[df['GI Class'] != 'Pick by Orders']
+        # ✅ Assign unique BinNo per GI (only for 'Bin' class)
+        bin_gi_issues = df[df['GI Class'] == 'Bin']['IssueNo'].unique()
+        bin_no_mapping = {issue: f"Bin{str(i+1).zfill(3)}" for i, issue in enumerate(sorted(bin_gi_issues))}
+        df['BinNo'] = df['IssueNo'].map(bin_no_mapping)
+
+
         # STEP 2: Assign GI Index (per GI No)
         df['GI Index'] = df.groupby('IssueNo').cumcount() + 1
 
