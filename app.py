@@ -149,12 +149,12 @@ if picking_pool_file and sku_master_file:
             'SKUDescription',         # 4
             'Batch No',               # 5
             'PickingQty',             # 6
-            'Commercial Box Count'    # 7
+            'Commercial Box Count',   # 7
             'DeliveryDate',           # 8
             'ShipToName',             # 9
             'GI Class',               # 10
             'JobNo',                  # 11            
-            'CartonDescription',      # 12
+            'CartonDescription'       # 12
             
             
             
