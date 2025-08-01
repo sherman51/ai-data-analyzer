@@ -168,7 +168,8 @@ if picking_pool_file and sku_master_file:
             'ShipToName',
             'Type',
             'JobNo',
-            'CartonDescription'       
+            'CartonDescription',
+            'LocationType
         ]].drop_duplicates()
 
         st.success("✅ Processing complete!")
