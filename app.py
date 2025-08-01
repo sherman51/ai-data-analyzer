@@ -186,6 +186,7 @@ if picking_pool_file and sku_master_file:
             'SKUDescription',
             'Batch No',
             'PickingQty',
+            'Qty per Carton',
             'Commercial Box Count',
             'DeliveryDate',
             'ShipToName',
