@@ -73,7 +73,8 @@ if picking_pool_file and sku_master_file:
         # Filter valid delivery dates
         picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-        picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.strftime('%Y-%m-%d')
+        picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.normalize()  # time set to 00:00:00
+
 
 
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
