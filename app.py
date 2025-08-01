@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import openai
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill
+import hashlib
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
@@ -182,9 +185,6 @@ if picking_pool_file and sku_master_file:
 
         # Download
         output = BytesIO()
-    from openpyxl.utils import get_column_letter
-    from openpyxl.styles import PatternFill
-    import hashlib
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
