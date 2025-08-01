@@ -23,7 +23,7 @@ def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
     iv = row.get('Item Vol', 0) or 0
-    total_vol = row.get('Total Item Vol', 0) or 0  # get total volume directly
+    qpco = row.get('Qty Commercial Box',0) or 0
 
     if pq == 0 or qpc == 0 or iv == 0 or total_vol == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
@@ -40,12 +40,8 @@ def calculate_carton_info(row):
     ]
 
     if loose > 0:
-        if loose < 1:
-            # For fractional loose qty, use Total Item Vol directly
-            looseVol = total_vol
-        else:
             # For loose >=1, calculate loose volume normally
-            looseVol = loose * iv
+            looseVol = loose/qpco * iv
 
         looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
 
