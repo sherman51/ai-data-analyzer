@@ -71,12 +71,8 @@ if picking_pool_file and sku_master_file:
         sku_master = pd.read_excel(sku_master_file)
 
         # Filter valid delivery dates
-        picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
+        picking_pool['DeliveryDate'] = pd.to_date(picking_pool['DeliveryDate'], errors='coerce')
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-        
-        # If you need ISO strings for external use:
-        picking_pool['DeliveryDateISO'] = picking_pool['DeliveryDate'].dt.strftime('%Y-%m-%d')
-
 
 
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
