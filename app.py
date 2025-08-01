@@ -64,10 +64,13 @@ if picking_pool_file and sku_master_file:
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
         picking_pool = picking_pool[
             (picking_pool['Zone'] == 'A') &
-            (picking_pool['Location'].astype(str).str.startswith('A-') | 
-             picking_pool['Location'].astype(str).str.startswith('SOFT-') &
-            picking_pool['LocationType'] != 'Storage')
+            (
+                picking_pool['Location'].astype(str).str.startswith('A-') |
+                picking_pool['Location'].astype(str).str.startswith('SOFT-')
+            ) &
+            (picking_pool['LocationType'] != 'Storage')
         ]
+
 
         # Sidebar date input
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
