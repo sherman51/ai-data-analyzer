@@ -36,7 +36,7 @@ def calculate_carton_info(row):
         (6000, "1S"),
         (12000, "1Rectangle"),
         (48000, "1L"),
-        (float('inf'), "1XL")  # fallback for extremely large loose volumes
+        (float('inf'), "1XLL")  # fallback for extremely large loose volumes
     ]
 
     if loose > 0:
