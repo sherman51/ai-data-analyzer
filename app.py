@@ -199,7 +199,7 @@ User question: {prompt}
 
             try:
                 response = openai.ChatCompletion.create(
-                    model="gpt-4",
+                    model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
                         {"role": "user", "content": full_prompt}
