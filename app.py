@@ -182,8 +182,42 @@ if picking_pool_file and sku_master_file:
 
         # Download
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill
+import hashlib
+
+with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
+    workbook = writer.book
+    worksheet = writer.sheets['Master Pick Ticket']
+
+    # --- Autofit column widths ---
+    for col_idx, column_cells in enumerate(worksheet.columns, 1):
+        max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+        adjusted_width = max_length + 2
+        worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+
+    # --- Color code cells with same SKU and JobNo ---
+    sku_job_groups = output_df.groupby(['SKU', 'JobNo']).groups
+
+    def get_color_for_key(key):
+        # Generate a hash-based color
+        hex_hash = hashlib.md5(str(key).encode()).hexdigest()
+        return hex_hash[:6]  # First 6 chars for RGB
+
+    used_fills = {}
+
+    for (sku, jobno), indices in sku_job_groups.items():
+        hex_color = get_color_for_key((sku, jobno))
+        fill_color = hex_color.upper()
+        if fill_color not in used_fills:
+            used_fills[fill_color] = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
+
+        for idx in indices:
+            row_num = idx + 2  # Excel rows are 1-based, and +1 for header
+            for col in range(1, worksheet.max_column + 1):
+                worksheet.cell(row=row_num, column=col).fill = used_fills[fill_color]
+
         st.download_button(
             label="⬇️ Download Master Pick Ticket Excel",
             data=output.getvalue(),
