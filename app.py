@@ -226,26 +226,39 @@ if picking_pool_file and sku_master_file:
         sku_batch_groups = output_df.groupby('SKU')['Batch No'].nunique()
         skus_with_multiple_batches = sku_batch_groups[sku_batch_groups > 1].index.tolist()
         
-        # --- Generate color fills for each SKU with multiple batches ---
-        def get_color_for_sku(sku):
-            hex_hash = hashlib.md5(str(sku).encode()).hexdigest()
-            return hex_hash[:6].upper()  # First 6 chars for RGB hex color
+       from openpyxl.styles import PatternFill
+import hashlib
+
+# Clean whitespace and ensure strings
+output_df['Batch No'] = output_df['Batch No'].astype(str).str.strip()
+output_df['SKU'] = output_df['SKU'].astype(str).str.strip()
+
+    # Group and identify SKUs with multiple Batch Nos
+    sku_batch_groups = output_df.groupby('SKU')['Batch No'].nunique()
+    print("SKUs with multiple Batch Nos:")
+    print(sku_batch_groups[sku_batch_groups > 1])  # DEBUG: check if your SKU appears here
+    
+    skus_with_multiple_batches = sku_batch_groups[sku_batch_groups > 1].index.tolist()
+    
+    def get_color_for_sku(sku):
+        hex_hash = hashlib.md5(str(sku).encode()).hexdigest()
+        return hex_hash[:6].upper()
+    
+    used_fills = {}
+    
+    sku_rows = output_df[output_df['SKU'].isin(skus_with_multiple_batches)].index
+    
+    for idx in sku_rows:
+        sku = output_df.at[idx, 'SKU']
+        fill_color = get_color_for_sku(sku)
         
-        used_fills = {}
+        if fill_color not in used_fills:
+            used_fills[fill_color] = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
         
-        # Get indices of rows where SKU is in SKUs with multiple batches
-        sku_rows = output_df[output_df['SKU'].isin(skus_with_multiple_batches)].index
-        
-        for idx in sku_rows:
-            sku = output_df.at[idx, 'SKU']
-            fill_color = get_color_for_sku(sku)
-            
-            if fill_color not in used_fills:
-                used_fills[fill_color] = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
-            
-            row_num = idx + 2  # +1 for header row, +1 for Excel 1-based indexing
-            for col in range(1, worksheet.max_column + 1):
-                worksheet.cell(row=row_num, column=col).fill = used_fills[fill_color]
+        row_num = idx + 2  # Adjust for header and Excel indexing
+        for col in range(1, worksheet.max_column + 1):
+            worksheet.cell(row=row_num, column=col).fill = used_fills[fill_color]
+
 
 
         
