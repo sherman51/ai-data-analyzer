@@ -30,18 +30,19 @@ def calculate_carton_info(row):
     cartons = pq // qpc
     loose = pq % qpc
 
+    # Define carton size thresholds (volume in cc)
+    carton_sizes = [
+        (1200, "1XS"),
+        (6000, "1S"),
+        (12000, "1Rectangle"),
+        (48000, "1L"),
+        (float('inf'), "1XL")  # fallback for extremely large loose volumes
+    ]
+
     if loose > 0:
         looseVol = loose * iv
-        if looseVol <= 1200:
-            looseBox = "1XS"
-        elif looseVol <= 6000:
-            looseBox = "1S"
-        elif looseVol <= 12000:
-            looseBox = "1Rectangle"
-        elif looseVol <= 48000:
-            looseBox = "1L"
-        else:
-            looseBox = "1L"
+        # Select the smallest carton that can fit the loose volume
+        looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
 
         desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
         totalC = cartons + 1
