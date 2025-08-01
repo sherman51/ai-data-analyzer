@@ -48,8 +48,8 @@ def calculate_carton_info(row):
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
-def classify_gi(row):
-    return 'Bin' if row['Total GI Vol'] < 600000 else 'Layer'
+def classify_gi(volume):
+    return 'Bin' if volume < 600000 else 'Layer'
 
 # ------------------------ DATA PROCESSING ------------------------
 if picking_pool_file and sku_master_file:
@@ -64,13 +64,13 @@ if picking_pool_file and sku_master_file:
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
         picking_pool = picking_pool[
             (picking_pool['Zone'] == 'A') &
-            (picking_pool['Location'].astype(str).str.startswith('A-') | picking_pool['Location'].astype(str).str.startswith('SOFT-'))
+            (picking_pool['Location'].astype(str).str.startswith('A-') | 
+             picking_pool['Location'].astype(str).str.startswith('SOFT-'))
         ]
 
-        
         # Sidebar date input
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
-        delivery_range = st.sidebar.date_input("📅 Filter by Delivery Date", (min_date, max_date), min_value=min_date, max_value=max_date)
+        delivery_range = st.sidebar.date_input("🗕️ Filter by Delivery Date", (min_date, max_date), min_value=min_date, max_value=max_date)
 
         if isinstance(delivery_range, tuple) and len(delivery_range) == 2:
             start, end = pd.to_datetime(delivery_range[0]), pd.to_datetime(delivery_range[1])
@@ -98,6 +98,15 @@ if picking_pool_file and sku_master_file:
         # GI volume and line count
         df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
         df = df.merge(df.groupby('IssueNo').size().rename('Line Count'), on='IssueNo')
+
+        # STEP 1: Classify GI (e.g., Bin or Layer)
+        df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
+
+        # STEP 2: Assign GI Index (per GI No)
+        df['GI Index'] = df.groupby('IssueNo').cumcount() + 1
+
+        # STEP 3: Merge into 'Type'
+        df['Type'] = df['GI Class'] + ' ' + df['GI Index'].astype(str)
 
         # Split data
         single_line = df[df['Line Count'] == 1].copy()
@@ -139,24 +148,13 @@ if picking_pool_file and sku_master_file:
         elif gi_type == "Multi-line":
             final_df = final_df[final_df['Line Count'] > 1]
 
-        # Carton Info + GI Class
+        # Carton Info
         final_df = pd.concat([final_df, final_df.apply(calculate_carton_info, axis=1)], axis=1)
-        # STEP 1: Classify GI (e.g., Bin or Layer)
-        final_df['GI Class'] = final_df['IssueNo'].map(gi_class_dict)
-        
-        # STEP 2: Assign GI Index (per GI No)
-        final_df['GI Index'] = final_df.groupby('IssueNo').cumcount() + 1
-        
-        # STEP 3: Merge into 'Type'
-        final_df['Type'] = final_df['GI Class'] + ' ' + final_df['GI Index'].astype(str)
-
-
 
         # Extra columns
         final_df['Batch No'] = final_df.get('StorageLocation')
         final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-        
         output_df = final_df[[ 
             'IssueNo',
             'SKU',
@@ -167,12 +165,10 @@ if picking_pool_file and sku_master_file:
             'Commercial Box Count',
             'DeliveryDate',
             'ShipToName',
-            'Type',             # 🆕 Merged column: GI Class + GI Index
-            'JobNo',            
+            'Type',
+            'JobNo',
             'CartonDescription'       
         ]].drop_duplicates()
-
-
 
         st.success("✅ Processing complete!")
         st.dataframe(output_df.head(20))
@@ -196,54 +192,3 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
-# ------------------------ AI ASSISTANT ------------------------
-st.sidebar.title("🤖 AI Assistant")
-if st.sidebar.checkbox("Open Chat Assistant"):
-
-    st.subheader("🤖 Ask me about the pick ticket data!")
-
-    if "final_df" in st.session_state:
-        final_df = st.session_state["final_df"]
-        chat_history = st.session_state.get("chat_history", [])
-
-        for msg in chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        prompt = st.chat_input("Ask a question about the pick ticket data...")
-        if prompt:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            df_info = final_df.describe(include='all').to_string()
-            full_prompt = f"""
-You are a data assistant. Answer questions about the pick ticket data below:
-
-{df_info}
-
-User question: {prompt}
-"""
-
-            try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You're a helpful assistant that answers questions about logistics and order picking data."},
-                        {"role": "user", "content": full_prompt}
-                    ]
-                )
-                answer = response['choices'][0]['message']['content']
-            except Exception as e:
-                answer = f"❌ Failed to call OpenAI API: {e}"
-
-            with st.chat_message("assistant"):
-                st.markdown(answer)
-
-            chat_history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": answer}
-            ])
-            st.session_state["chat_history"] = chat_history
-    else:
-        st.warning("Please upload and process data first.")
