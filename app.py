@@ -198,14 +198,26 @@ if picking_pool_file and sku_master_file:
                 worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
         
             # --- Color code cells with same SKU and JobNo ---
-            sku_job_groups = output_df.groupby(['SKU', 'JobNo']).groups
-        
-            def get_color_for_key(key):
-                # Generate a hash-based color
-                hex_hash = hashlib.md5(str(key).encode()).hexdigest()
-                return hex_hash[:6]  # First 6 chars for RGB
-        
+                    # --- Color code rows with same JobNo ---
+            job_groups = output_df.groupby('JobNo').groups
+    
+            def get_color_for_job(job_no):
+                # Generate a hex color from job number
+                hex_hash = hashlib.md5(str(job_no).encode()).hexdigest()
+                return hex_hash[:6].upper()  # First 6 characters for RGB
+    
             used_fills = {}
+    
+            for job_no, indices in job_groups.items():
+                fill_color = get_color_for_job(job_no)
+                if fill_color not in used_fills:
+                    used_fills[fill_color] = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
+    
+                for idx in indices:
+                    row_num = idx + 2  # +1 for header row, +1 for 1-based Excel rows
+                    for col in range(1, worksheet.max_column + 1):
+                        worksheet.cell(row=row_num, column=col).fill = used_fills[fill_color]
+
         
 
 
