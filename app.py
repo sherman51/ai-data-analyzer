@@ -67,7 +67,6 @@ if picking_pool_file and sku_master_file:
             (picking_pool['Location'].astype(str).str.startswith('A-') | 
              picking_pool['Location'].astype(str).str.startswith('SOFT-') &
             picking_pool['LocationType'] != "Storage")
-)
         ]
 
         # Sidebar date input
