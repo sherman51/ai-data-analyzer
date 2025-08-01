@@ -43,13 +43,13 @@ def calculate_carton_info(row):
             # For loose >=1, calculate loose volume normally
             looseVol = loose/qpco * iv
 
-        looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
-
-        desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
-        totalC = cartons + 1
+            looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
+    
+            desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
+            totalC = cartons + 1
     else:
-        desc = f"{cartons} Commercial Carton"
-        totalC = cartons
+            desc = f"{cartons} Commercial Carton"
+            totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
