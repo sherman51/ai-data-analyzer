@@ -141,11 +141,15 @@ if picking_pool_file and sku_master_file:
 
         # Carton Info + GI Class
         final_df = pd.concat([final_df, final_df.apply(calculate_carton_info, axis=1)], axis=1)
-        final_df['GI Class'] = final_df.apply(classify_gi, axis=1)
-        # 🆕 Add running index per GI
+        # STEP 1: Classify GI (e.g., Bin or Layer)
+        final_df['GI Class'] = final_df['IssueNo'].map(gi_class_dict)
+        
+        # STEP 2: Assign GI Index (per GI No)
         final_df['GI Index'] = final_df.groupby('IssueNo').cumcount() + 1
-        # 🆕 Merge GI Class and Index into "Type" column (e.g., "Bin 1", "Layer 2")
+        
+        # STEP 3: Merge into 'Type'
         final_df['Type'] = final_df['GI Class'] + ' ' + final_df['GI Index'].astype(str)
+
 
 
         # Extra columns
