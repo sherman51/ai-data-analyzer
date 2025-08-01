@@ -226,19 +226,18 @@ if picking_pool_file and sku_master_file:
         sku_batch_groups = output_df.groupby('SKU')['Batch No'].nunique()
         skus_with_multiple_batches = sku_batch_groups[sku_batch_groups > 1].index.tolist()
         
-       from openpyxl.styles import PatternFill
-import hashlib
 
-# Clean whitespace and ensure strings
-output_df['Batch No'] = output_df['Batch No'].astype(str).str.strip()
-output_df['SKU'] = output_df['SKU'].astype(str).str.strip()
 
-    # Group and identify SKUs with multiple Batch Nos
-    sku_batch_groups = output_df.groupby('SKU')['Batch No'].nunique()
-    print("SKUs with multiple Batch Nos:")
-    print(sku_batch_groups[sku_batch_groups > 1])  # DEBUG: check if your SKU appears here
+        # Clean whitespace and ensure strings
+        output_df['Batch No'] = output_df['Batch No'].astype(str).str.strip()
+        output_df['SKU'] = output_df['SKU'].astype(str).str.strip()
     
-    skus_with_multiple_batches = sku_batch_groups[sku_batch_groups > 1].index.tolist()
+        # Group and identify SKUs with multiple Batch Nos
+        sku_batch_groups = output_df.groupby('SKU')['Batch No'].nunique()
+        print("SKUs with multiple Batch Nos:")
+        print(sku_batch_groups[sku_batch_groups > 1])  # DEBUG: check if your SKU appears here
+        
+        skus_with_multiple_batches = sku_batch_groups[sku_batch_groups > 1].index.tolist()
     
     def get_color_for_sku(sku):
         hex_hash = hashlib.md5(str(sku).encode()).hexdigest()
