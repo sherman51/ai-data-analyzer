@@ -11,7 +11,7 @@ uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=["xlsx"])
 
 if uploaded_file:
     # Skip top metadata rows (header at row 5)
-    df_raw = pd.read_excel(uploaded_file, skiprows=4)
+    df_raw = pd.read_excel(uploaded_file, skiprows=5)
 
     # Drop columns with all NaNs
     df = df_raw.dropna(axis=1, how="all")
@@ -64,3 +64,4 @@ if uploaded_file:
 
 else:
     st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
