@@ -232,7 +232,7 @@ if picking_pool_file and sku_master_file:
                     # Check if the cell belongs to the "SKU" column (adjust the column index as needed)
                     if cell.column == 2:  # Assuming "SKU" is in the 2nd column
                         if cell.value in skus_with_diff_batch:  # If the SKU has multiple different Batch Nos
-                            row.fill = highlight_fill  # Apply yellow background
+                            cell.fill = highlight_fill  # Apply yellow background
         
         # After writing data and applying formatting
         st.download_button(
@@ -251,3 +251,4 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
