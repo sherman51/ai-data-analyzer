@@ -15,8 +15,6 @@ st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
 sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=["xlsx"])
 
-# Filter option
-gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
 # ------------------------ HELPER FUNCTIONS ------------------------
 def calculate_carton_info(row):
@@ -83,6 +81,9 @@ if picking_pool_file and sku_master_file:
             ) &
             (picking_pool['LocationType'] != 'storage')
         ]
+
+        # Filter option
+        gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
         # Sidebar date input
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
@@ -266,6 +267,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
