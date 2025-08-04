@@ -199,7 +199,8 @@ if picking_pool_file and sku_master_file:
             'Type',
             'JobNo',
             'CartonDescription',
-            'LocationType'
+            'LocationType',
+            'Total GI Vol'
         ]].drop_duplicates()
 
         st.success("✅ Processing complete!")
@@ -264,6 +265,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
