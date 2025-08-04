@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import openai
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
-from itertools import cycle
+import hashlib
+
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
@@ -22,7 +24,7 @@ def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
     iv = row.get('Item Vol', 0) or 0
-    qpco = row.get('Qty Commercial Box', 0) or 0
+    qpco = row.get('Qty Commercial Box',0) or 0
 
     if pq == 0 or qpc == 0 or iv == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
@@ -39,18 +41,20 @@ def calculate_carton_info(row):
     ]
 
     if loose > 0:
-        # For loose >=1, calculate loose volume normally
-        looseVol = loose / qpco * iv
+            # For loose >=1, calculate loose volume normally
+            looseVol = loose/qpco * iv
 
-        looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
-
-        desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
-        totalC = cartons + 1
+            looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
+    
+            desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
+            totalC = cartons + 1
     else:
-        desc = f"{cartons} Commercial Carton"
-        totalC = cartons
+            desc = f"{cartons} Commercial Carton"
+            totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
+
+
 
 def classify_gi(volume):
     if volume < 35000:
@@ -72,17 +76,20 @@ if picking_pool_file and sku_master_file:
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
         picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.normalize()  # time set to 00:00:00
 
+
+
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
         picking_pool['LocationType'] = picking_pool['LocationType'].astype(str).str.strip().str.lower()
-
-        picking_pool = picking_pool[ 
-            (picking_pool['Zone'] == 'A') & 
+        
+        picking_pool = picking_pool[
+            (picking_pool['Zone'] == 'A') &
             (
-                picking_pool['Location'].astype(str).str.startswith('A-') | 
+                picking_pool['Location'].astype(str).str.startswith('A-') |
                 picking_pool['Location'].astype(str).str.startswith('SOFT-')
-            ) & 
+            ) &
             (picking_pool['LocationType'] != 'storage')
         ]
+
 
         # Sidebar date input
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
@@ -177,51 +184,70 @@ if picking_pool_file and sku_master_file:
 
         # Extra columns
         final_df['Batch No'] = final_df.get('StorageLocation')
-        final_df['Commercial Box'] = final_df.get('Qty Commercial Box')
+        final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-        # STEP 4: Highlighting row colors based on SKU and Batch No
-        unique_batches = final_df[['SKU', 'Batch No']].drop_duplicates()
-        color_cycle = cycle([
-            PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid"),
-            PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid"),
-            PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid"),
-            PatternFill(start_color="00FFFF", end_color="00FFFF", fill_type="solid"),
-            PatternFill(start_color="0000FF", end_color="0000FF", fill_type="solid"),
-            PatternFill(start_color="FF00FF", end_color="FF00FF", fill_type="solid")
-        ])
+        output_df = final_df[[ 
+            'IssueNo',
+            'SKU',
+            'Location_x',
+            'SKUDescription',
+            'Batch No',
+            'PickingQty',
+            'Qty per Carton',
+            'Commercial Box Count',
+            'DeliveryDate',
+            'ShipToName',
+            'Type',
+            'JobNo',
+            'CartonDescription',
+            'LocationType',
+            'Total GI Vol'
+        ]].drop_duplicates()
 
-        batch_color_map = {}
-        for _, row in unique_batches.iterrows():
-            sku_batch_combo = f"{row['SKU']}-{row['Batch No']}"
-            if sku_batch_combo not in batch_color_map:
-                batch_color_map[sku_batch_combo] = next(color_cycle)
-
-
-        with BytesIO() as buffer:
-            writer = pd.ExcelWriter(buffer, engine='openpyxl')
-            final_df.to_excel(writer, index=False, sheet_name='Pick Tickets')
+        st.success("✅ Processing complete!")
+        st.dataframe(output_df.head(20))
+        # --- Write to Excel and Apply Autofit and Highlighting ---
+        output = BytesIO()  # Initialize output here
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
             workbook = writer.book
-            worksheet = writer.sheets['Pick Tickets']
+            worksheet = writer.sheets['Master Pick Ticket']
+            
+            # --- Autofit column widths ---
+            for col_idx, column_cells in enumerate(worksheet.columns, 1):
+                max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+                adjusted_width = max_length + 2
+                worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
         
-            # Apply colors based on SKU-Batch No combinations
-            for idx, row in final_df.iterrows():
-                sku_batch_combo = f"{row['SKU']}-{row['Batch No']}"
-                color_fill = batch_color_map.get(sku_batch_combo, PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"))
-                
-                for col_num, col_name in enumerate(final_df.columns):
-                    cell = worksheet.cell(row=idx+2, column=col_num+1)  # +2 because Excel is 1-indexed, and we have a header row
-                    cell.fill = color_fill
+            # --- Identify SKUs with Different Batch Nos ---
+            # Group by SKU and Batch No, and find if there are multiple different Batch Nos for the same SKU
+            sku_batch_group = output_df.groupby('SKU')['Batch No'].nunique()  # Count unique Batch Nos for each SKU
+            skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index  # Find SKUs with more than 1 Batch No
         
-            # Write to buffer and prepare for download
-            buffer.seek(0)  # Go to the beginning of the buffer
+            # --- Highlight those rows ---
+            highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")  # Yellow highlight
+            for row in worksheet.iter_rows(min_row=2, min_col=1, max_col=worksheet.max_column):
+                for cell in row:
+                    # Check if the cell belongs to the "SKU" column (adjust the column index as needed)
+                    if cell.column == 2:  # Assuming "SKU" is in the 2nd column
+                        if cell.value in skus_with_diff_batch:  # If the SKU has multiple different Batch Nos
+                            row.fill = highlight_fill  # Apply yellow background
         
-            # Download link
-            st.download_button(
-                label="Download Master Pick Ticket",
-                data=buffer,
-                file_name="master_pick_ticket.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-    
+        # After writing data and applying formatting
+        st.download_button(
+            label="⬇️ Download Master Pick Ticket Excel",
+            data=output.getvalue(),
+            file_name="MasterPickTicket.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+
+        # Store for AI
+        st.session_state["final_df"] = final_df
+
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"❌ Error during processing: {e}")
+
+else:
+    st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
