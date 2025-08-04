@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import openai
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
-import hashlib
+from itertools import cycle
 
 
 # ------------------------ UI CONFIGURATION ------------------------
@@ -206,6 +205,8 @@ if picking_pool_file and sku_master_file:
 
         st.success("✅ Processing complete!")
         st.dataframe(output_df.head(20))
+
+
         # --- Write to Excel and Apply Autofit and Highlighting ---
         output = BytesIO()  # Initialize output here
         
@@ -219,28 +220,46 @@ if picking_pool_file and sku_master_file:
                 max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
                 adjusted_width = max_length + 2
                 worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
-        
+            
             # --- Identify SKUs with Different Batch Nos ---
             # Group by SKU and Batch No, and find if there are multiple different Batch Nos for the same SKU
             sku_batch_group = output_df.groupby('SKU')['Batch No'].nunique()  # Count unique Batch Nos for each SKU
             skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index  # Find SKUs with more than 1 Batch No
-        
-            # --- Highlight those rows ---
-            highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")  # Yellow highlight
+            
+            # --- Prepare Colors ---
+            color_cycle = cycle([
+                PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid"),  # Red
+                PatternFill(start_color="0000FF", end_color="0000FF", fill_type="solid"),  # Blue
+                PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid"),  # Green
+                PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid"),  # Yellow
+                PatternFill(start_color="FF00FF", end_color="FF00FF", fill_type="solid"),  # Magenta
+                PatternFill(start_color="00FFFF", end_color="00FFFF", fill_type="solid")   # Cyan
+            ])
+            
+            # --- Highlight Rows for SKUs with Multiple Batch Nos ---
+            sku_color_map = {}
+            for sku in skus_with_diff_batch:
+                sku_color_map[sku] = next(color_cycle)  # Assign a unique color from the cycle
+            
             for row in worksheet.iter_rows(min_row=2, min_col=1, max_col=worksheet.max_column):
                 for cell in row:
-                    # Check if the cell belongs to the "SKU" column (adjust the column index as needed)
-                    if cell.column == 2:  # Assuming "SKU" is in the 2nd column
+                    if cell.column == 2:  # Assuming "SKU" is in the 2nd column (adjust as needed)
                         if cell.value in skus_with_diff_batch:  # If the SKU has multiple different Batch Nos
-                            cell.fill = highlight_fill  # Apply yellow background
+                            color_fill = sku_color_map[cell.value]  # Get the color for this SKU
+                            for row_cell in row:  # Highlight the entire row
+                                row_cell.fill = color_fill  # Apply color to all cells in the row
         
-        # After writing data and applying formatting
-        st.download_button(
-            label="⬇️ Download Master Pick Ticket Excel",
-            data=output.getvalue(),
-            file_name="MasterPickTicket.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            # Write to buffer and prepare for download
+            output.seek(0)  # Go to the beginning of the buffer
+        
+            # Download link
+            st.download_button(
+                label="Download Master Pick Ticket",
+                data=output,
+                file_name="master_pick_ticket.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
 
 
         # Store for AI
@@ -251,4 +270,5 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
