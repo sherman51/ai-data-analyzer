@@ -197,7 +197,7 @@ if picking_pool_file and sku_master_file:
             'PickingQty',
             'Qty per Carton',
             'Commercial Box Count',
-            picking_pool['DeliveryDate'].dt.date,
+            'DeliveryDate',
             'ShipToName',
             'Type',
             'JobNo',
@@ -268,6 +268,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
