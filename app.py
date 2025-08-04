@@ -51,6 +51,8 @@ def calculate_carton_info(row):
 
 
 def classify_gi(volume):
+    if pd.isna(volume):
+        return 'Unknown'
     if volume < 35000:
         return 'Bin'
     elif volume < 248500:
@@ -118,6 +120,8 @@ if picking_pool_file and sku_master_file:
 
         # Step 1: Ensure GI is classified as either "Bin" or "Layer" based on volume
         df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
+        df = df[df['GI Class'].isin(['Bin', 'Layer'])]
+
         
         # Step 2: Separate the Bin and Layer classifications
         bin_gi_issues = df[df['GI Class'] == 'Bin']['IssueNo'].unique()
@@ -134,9 +138,6 @@ if picking_pool_file and sku_master_file:
         # Step 4: Now we can assign the Type based on the GI class (Bin or Layer) and the unique number
         df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
         
-        # For GIs that are neither Bin nor Layer, Type will be set as 'Pick by Orders' or can be filtered out if necessary
-        df['Type'] = df['Type'].fillna('Pick by Orders')
-
         
         # Split data
         single_line = df[df['Line Count'] == 1].copy()
@@ -265,6 +266,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
