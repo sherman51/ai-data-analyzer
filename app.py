@@ -131,7 +131,7 @@ if picking_pool_file and sku_master_file:
         df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
         
         # Step 4: Now we can assign the Type based on the GI class (Bin or Layer) and the unique number
-        df['Type'] = df.apply(lambda row: f"{row['GI Class']} {row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo']}", axis=1)
+        df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
         
         # For GIs that are neither Bin nor Layer, Type will be set as 'Pick by Orders' or can be filtered out if necessary
         df['Type'] = df['Type'].fillna('Pick by Orders')
@@ -266,6 +266,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
