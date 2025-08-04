@@ -252,13 +252,13 @@ if picking_pool_file and sku_master_file:
             # Write to buffer and prepare for download
             output.seek(0)  # Go to the beginning of the buffer
         
-            # Download link
-            st.download_button(
-                label="Download Master Pick Ticket",
-                data=output,
-                file_name="master_pick_ticket.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        # Download link
+        st.download_button(
+            label="Download Master Pick Ticket",
+            data=output,
+            file_name="master_pick_ticket.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 
 
@@ -270,5 +270,6 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
