@@ -5,7 +5,6 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 from itertools import cycle
 
-
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
 st.title("📦 Master Pick Ticket Generator – Pick by Cart")
@@ -23,7 +22,7 @@ def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
     qpc = row.get('Qty per Carton', 0) or 0
     iv = row.get('Item Vol', 0) or 0
-    qpco = row.get('Qty Commercial Box',0) or 0
+    qpco = row.get('Qty Commercial Box', 0) or 0
 
     if pq == 0 or qpc == 0 or iv == 0:
         return pd.Series({'CartonCount': None, 'CartonDescription': 'Invalid'})
@@ -40,16 +39,16 @@ def calculate_carton_info(row):
     ]
 
     if loose > 0:
-            # For loose >=1, calculate loose volume normally
-            looseVol = loose/qpco * iv
+        # For loose >=1, calculate loose volume normally
+        looseVol = loose / qpco * iv
 
-            looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
-    
-            desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
-            totalC = cartons + 1
+        looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
+
+        desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
+        totalC = cartons + 1
     else:
-            desc = f"{cartons} Commercial Carton"
-            totalC = cartons
+        desc = f"{cartons} Commercial Carton"
+        totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
@@ -73,11 +72,9 @@ if picking_pool_file and sku_master_file:
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
         picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.normalize()  # time set to 00:00:00
 
-
-
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
         picking_pool['LocationType'] = picking_pool['LocationType'].astype(str).str.strip().str.lower()
-        
+
         picking_pool = picking_pool[ 
             (picking_pool['Zone'] == 'A') & 
             (
@@ -216,7 +213,6 @@ if picking_pool_file and sku_master_file:
                     cell.fill = color_fill
         
             # Write to buffer and prepare for download
-            writer.save()  # No longer needed, it's actually not required in recent versions of Pandas.
             buffer.seek(0)  # Go to the beginning of the buffer
         
             # Download link
@@ -226,4 +222,6 @@ if picking_pool_file and sku_master_file:
                 file_name="master_pick_ticket.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
+    
+    except Exception as e:
+        st.error(f"Error: {e}")
