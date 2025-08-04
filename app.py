@@ -70,7 +70,8 @@ if picking_pool_file and sku_master_file:
         # Filter valid delivery dates
         picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-        picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.date
+
+
 
 
         # 🆕 Filter for Zone "A" and Location starting with "A-" or "SOFT-"
@@ -196,7 +197,7 @@ if picking_pool_file and sku_master_file:
             'PickingQty',
             'Qty per Carton',
             'Commercial Box Count',
-            'DeliveryDate',
+            picking_pool['DeliveryDate'].dt.date,
             'ShipToName',
             'Type',
             'JobNo',
@@ -267,6 +268,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
