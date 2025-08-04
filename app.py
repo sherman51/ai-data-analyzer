@@ -3,7 +3,6 @@ import pandas as pd
 from io import BytesIO
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
-import hashlib
 from itertools import cycle
 
 
@@ -202,31 +201,28 @@ if picking_pool_file and sku_master_file:
 
         # Write to Excel
         with BytesIO() as buffer:
-            writer = pd.ExcelWriter(buffer, engine='openpyxl')
-            final_df.to_excel(writer, index=False, sheet_name='Pick Tickets')
-            workbook = writer.book
-            worksheet = writer.sheets['Pick Tickets']
+    writer = pd.ExcelWriter(buffer, engine='openpyxl')
+    final_df.to_excel(writer, index=False, sheet_name='Pick Tickets')
+    workbook = writer.book
+    worksheet = writer.sheets['Pick Tickets']
 
-            # Apply colors based on SKU-Batch No combinations
-            for idx, row in final_df.iterrows():
-                sku_batch_combo = f"{row['SKU']}-{row['Batch No']}"
-                color_fill = batch_color_map.get(sku_batch_combo, PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"))
-                
-                for col_num, col_name in enumerate(final_df.columns):
-                    cell = worksheet.cell(row=idx+2, column=col_num+1)  # +2 because Excel is 1-indexed, and we have a header row
-                    cell.fill = color_fill
+    # Apply colors based on SKU-Batch No combinations
+    for idx, row in final_df.iterrows():
+        sku_batch_combo = f"{row['SKU']}-{row['Batch No']}"
+        color_fill = batch_color_map.get(sku_batch_combo, PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"))
+        
+        for col_num, col_name in enumerate(final_df.columns):
+            cell = worksheet.cell(row=idx+2, column=col_num+1)  # +2 because Excel is 1-indexed, and we have a header row
+            cell.fill = color_fill
 
-            # Save the workbook to the buffer
-            writer.save()
+    # Write to buffer and prepare for download
+    writer.save()  # No longer needed, it's actually not required in recent versions of Pandas.
+    buffer.seek(0)  # Go to the beginning of the buffer
 
-            # Download link
-            buffer.seek(0)
-            st.download_button(
-                label="Download Master Pick Ticket",
-                data=buffer,
-                file_name="master_pick_ticket.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+    # Download link
+    st.download_button(
+        label="Download Master Pick Ticket",
+        data=buffer,
+        file_name="master_pick_ticket.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
