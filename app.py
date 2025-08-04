@@ -229,10 +229,11 @@ if picking_pool_file and sku_master_file:
             
             # --- Prepare Lighter Shades of Yellow ---
             color_cycle = cycle([
-                PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid"),  # Light Yellow
-                PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid"),  # Lemon Chiffon
-                PatternFill(start_color="FAFAD2", end_color="FAFAD2", fill_type="solid"),  # Light Goldenrod Yellow
-                PatternFill(start_color="FFFFE0", end_color="FFFFE0", fill_type="solid")   # Light Yellow 2
+                PatternFill(start_color="CCC0DA", end_color="CCC0DA", fill_type="solid"),  # Purple
+                PatternFill(start_color="FCD5B4", end_color="FCD5B4", fill_type="solid"),  # Orange
+                PatternFill(start_color="E6B8B7", end_color="E6B8B7", fill_type="solid"),  # Red
+                PatternFill(start_color="D8E4BC", end_color="D8E4BC", fill_type="solid"),  # Green
+                PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid"),  # Yellow                                                                        
             ])
             
             # --- Highlight Rows for SKUs with Multiple Batch Nos ---
@@ -267,6 +268,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
