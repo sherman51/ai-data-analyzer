@@ -227,7 +227,7 @@ if picking_pool_file and sku_master_file:
             skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index  # Find SKUs with more than 1 Batch No
             
             # --- Prepare Lighter Shades of Yellow ---
-            light_yellow_shades = cycle([
+            color_cycle = cycle([
                 PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid"),  # Light Yellow
                 PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid"),  # Lemon Chiffon
                 PatternFill(start_color="FAFAD2", end_color="FAFAD2", fill_type="solid"),  # Light Goldenrod Yellow
@@ -268,6 +268,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
