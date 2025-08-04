@@ -105,8 +105,9 @@ else:
     else:
         st.warning("ExpectedDate column not found. Forecast chart not available.")
 
-else:
-    st.info("⬅ Please upload a Good Receive Excel file to begin.")
+    else:
+        st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
 
 
 
