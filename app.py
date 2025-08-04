@@ -206,6 +206,30 @@ if picking_pool_file and sku_master_file:
 
         st.success("✅ Processing complete!")
         st.dataframe(output_df.head(20))
+        # --- Write to Excel and Apply Autofit and Highlighting ---
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
+            workbook = writer.book
+            worksheet = writer.sheets['Master Pick Ticket']
+            
+            # --- Autofit column widths ---
+            for col_idx, column_cells in enumerate(worksheet.columns, 1):
+                max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+                adjusted_width = max_length + 2
+                worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+        
+            # --- Identify SKUs with Different Batch Nos ---
+            # Group by SKU and Batch No, and find if there are multiple different Batch Nos for the same SKU
+            sku_batch_group = output_df.groupby('SKU')['Batch No'].nunique()  # Count unique Batch Nos for each SKU
+            skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index  # Find SKUs with more than 1 Batch No
+        
+            # --- Highlight those rows ---
+            for row in worksheet.iter_rows(min_row=2, min_col=1, max_col=worksheet.max_column):
+                for cell in row:
+                    # Check if the cell belongs to the "SKU" column (adjust the column index as needed)
+                    if cell.column == 2:  # Assuming "SKU" is in the 2nd column
+                        if cell.value in skus_with_diff_batch:  # If the SKU has multiple different Batch Nos
+                            cell.fill = highlight_fill  # Apply yellow background
 
         # Download
                 # Download
