@@ -57,11 +57,12 @@ if uploaded_file:
     st.subheader("📅 GR Count Over Time")
     if "GRDate" in df.columns:
         df_plot = df.groupby(df["GRDate"].dt.date).size().reset_index(name="Count")
-        fig = px.line(df_plot, x="GRDate", y="Count", title="GRs Over Time")
+        fig = px.bar(df_plot, x="GRDate", y="Count", title="GRs Over Time")
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("GRDate column not found, can't plot timeline.")
 
 else:
     st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
 
