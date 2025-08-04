@@ -68,7 +68,7 @@ if picking_pool_file and sku_master_file:
         sku_master = pd.read_excel(sku_master_file)
 
         # Filter valid delivery dates
-        final_df['DeliveryDate'] = final_df['DeliveryDate'].dt.date
+        picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.date
         picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
 
@@ -266,6 +266,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
