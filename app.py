@@ -121,15 +121,27 @@ if picking_pool_file and sku_master_file:
         df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
         df = df.merge(df.groupby('IssueNo').size().rename('Line Count'), on='IssueNo')
 
-        # STEP 1: Classify GI (e.g., Bin or Layer)
+        # Step 1: Ensure GI is classified as either "Bin" or "Layer" based on volume
         df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
-
-        # 🚫 Exclude GIs classified as "Pick by Orders"
-        df = df[df['GI Class'] != 'Pick by Orders']
-        # ✅ Assign unique BinNo per GI (only for 'Bin' class)
+        
+        # Step 2: Separate the Bin and Layer classifications
         bin_gi_issues = df[df['GI Class'] == 'Bin']['IssueNo'].unique()
+        layer_gi_issues = df[df['GI Class'] == 'Layer']['IssueNo'].unique()
+        
+        # Step 3: Assign unique BinNo and LayerNo for each GI
         bin_no_mapping = {issue: f"Bin{str(i+1).zfill(3)}" for i, issue in enumerate(sorted(bin_gi_issues))}
+        layer_no_mapping = {issue: f"Layer{str(i+1).zfill(3)}" for i, issue in enumerate(sorted(layer_gi_issues))}
+        
+        # Assigning BinNo and LayerNo based on GI class
         df['BinNo'] = df['IssueNo'].map(bin_no_mapping)
+        df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
+        
+        # Step 4: Now we can assign the Type based on the GI class (Bin or Layer) and the unique number
+        df['Type'] = df.apply(lambda row: f"{row['GI Class']} {row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo']}", axis=1)
+        
+        # For GIs that are neither Bin nor Layer, Type will be set as 'Pick by Orders' or can be filtered out if necessary
+        df['Type'] = df['Type'].fillna('Pick by Orders')
+
 
 
         # STEP 2: Assign GI Index (per GI No)
@@ -268,6 +280,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
