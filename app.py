@@ -226,14 +226,12 @@ if picking_pool_file and sku_master_file:
             sku_batch_group = output_df.groupby('SKU')['Batch No'].nunique()  # Count unique Batch Nos for each SKU
             skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index  # Find SKUs with more than 1 Batch No
             
-            # --- Prepare Colors ---
-            color_cycle = cycle([
-                PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid"),  # Red
-                PatternFill(start_color="0000FF", end_color="0000FF", fill_type="solid"),  # Blue
-                PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid"),  # Green
-                PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid"),  # Yellow
-                PatternFill(start_color="FF00FF", end_color="FF00FF", fill_type="solid"),  # Magenta
-                PatternFill(start_color="00FFFF", end_color="00FFFF", fill_type="solid")   # Cyan
+            # --- Prepare Lighter Shades of Yellow ---
+            light_yellow_shades = cycle([
+                PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid"),  # Light Yellow
+                PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid"),  # Lemon Chiffon
+                PatternFill(start_color="FAFAD2", end_color="FAFAD2", fill_type="solid"),  # Light Goldenrod Yellow
+                PatternFill(start_color="FFFFE0", end_color="FFFFE0", fill_type="solid")   # Light Yellow 2
             ])
             
             # --- Highlight Rows for SKUs with Multiple Batch Nos ---
@@ -270,6 +268,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
