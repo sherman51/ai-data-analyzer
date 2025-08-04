@@ -51,34 +51,32 @@ if uploaded_file:
     with col3:
         st.metric("Total Rows", len(df))
 
-# ------------------------ VISUALIZATION 1: MONTHLY GR SUMMARY ------------------------
-st.subheader("📊 Monthly GR Summary (Grouped by GRDate)")
+    # ------------------------ VISUALIZATION 1: MONTHLY GR SUMMARY ------------------------
+    st.subheader("📊 Monthly GR Summary (Grouped by GRDate)")
 
-if "GRDate" in df.columns:
-    df_monthly = df.dropna(subset=["GRDate"]).copy()
-    df_monthly["GR_Month"] = df_monthly["GRDate"].dt.to_period("M").astype(str)
-    month_summary = df_monthly.groupby("GR_Month").size().reset_index(name="Total GRs")
+    if "GRDate" in df.columns:
+        df_monthly = df.dropna(subset=["GRDate"]).copy()
+        df_monthly["GR_Month"] = df_monthly["GRDate"].dt.to_period("M").astype(str)
+        month_summary = df_monthly.groupby("GR_Month").size().reset_index(name="Total GRs")
 
-    fig1 = px.bar(
-        month_summary,
-        x="GR_Month",
-        y="Total GRs",
-        text="Total GRs",
-        title="Monthly GR Summary",
-        labels={"GR_Month": "Month", "Total GRs": "Goods Received"},
-    )
-    fig1.update_traces(textposition="outside")
-    fig1.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig1, use_container_width=True)
+        fig1 = px.bar(
+            month_summary,
+            x="GR_Month",
+            y="Total GRs",
+            text="Total GRs",
+            title="Monthly GR Summary",
+            labels={"GR_Month": "Month", "Total GRs": "Goods Received"},
+        )
+        fig1.update_traces(textposition="outside")
+        fig1.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig1, use_container_width=True)
 
-else:
-    st.info("GRDate column not found, can't plot monthly summary.")
-
+    else:
+        st.info("GRDate column not found, can't plot monthly summary.")
 
     # ------------------------ VISUALIZATION 2: BAR CHART (Today vs Forecast) ------------------------
     st.subheader("📦 Today's Progress & Upcoming Forecast")
 
-    # Use ExpectedDate for forecasting (can change to GRDate if needed)
     if "ExpectedDate" in df.columns:
         today = pd.to_datetime(datetime.now().date())
         tomorrow = today + timedelta(days=1)
@@ -105,8 +103,9 @@ else:
     else:
         st.warning("ExpectedDate column not found. Forecast chart not available.")
 
-    else:
-        st.info("⬅ Please upload a Good Receive Excel file to begin.")
+else:
+    st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
 
 
 
