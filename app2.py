@@ -1,4 +1,4 @@
-import streamlit as st
+qimport streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
@@ -70,6 +70,7 @@ if "GRDate" in df.columns:
     fig1.update_traces(textposition="outside")
     fig1.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig1, use_container_width=True)
+
 else:
     st.info("GRDate column not found, can't plot monthly summary.")
 
@@ -106,4 +107,5 @@ else:
 
 else:
     st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
 
