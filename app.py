@@ -136,7 +136,7 @@ if picking_pool_file and sku_master_file:
         # For GIs that are neither Bin nor Layer, Type will be set as 'Pick by Orders' or can be filtered out if necessary
         df['Type'] = df['Type'].fillna('Pick by Orders')
         
-        df['Type'] = df[['Type', 'BinNo','LayerNo']].agg(' '.join, axis=1)
+        df['Type'] = df[['Type', 'BinNo']].agg(' '.join, axis=1)
         
         # Split data
         single_line = df[df['Line Count'] == 1].copy()
@@ -267,5 +267,6 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
