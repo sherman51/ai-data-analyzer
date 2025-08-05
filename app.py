@@ -69,10 +69,12 @@ if picking_pool_file and sku_master_file:
 
         # Filter valid delivery dates
         picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
-        # Format to a date string (YYYY-MM-DD)
-        picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].strftime("%Y-%m-%d")
+        
+        # Keep only rows with valid (non-null) dates
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-
+        
+        # Format to a date string (YYYY-MM-DD)
+        picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.strftime("%Y-%m-%d")
 
 
 
@@ -270,6 +272,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
