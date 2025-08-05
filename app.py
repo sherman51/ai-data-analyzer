@@ -100,9 +100,15 @@ def merge_and_clean(df, sku_master):
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
     return df
 
+def add_line_count(df):
+    line_counts = df.groupby('IssueNo').size()
+    df = df.copy()
+    df['Line Count'] = df['IssueNo'].map(line_counts)
+    return df
+
 def classify_and_assign(df):
     df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
-    df = df.merge(df.groupby('IssueNo').size().rename('Line Count'), on='IssueNo')
+    df = add_line_count(df)
     df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
     df = df[df['Total GI Vol'] <= 248500]
 
@@ -115,6 +121,80 @@ def classify_and_assign(df):
     df['BinNo'] = df['IssueNo'].map(bin_no_mapping)
     df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
     df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
+
+    return df
+
+def assign_job_numbers_advanced(df):
+    """
+    Assign Job No based on:
+    - Single-line GIs grouped by ShipToName with max 5 GIs per Job No
+      * If 2 or fewer job Nos exist per ShipToName line, combine with others (max 5 total)
+    - Multi-line GIs grouped by combined Total Item Vol ≤ 600000 per Job No
+      * GI cannot split across Job Nos
+    """
+
+    df = df.copy()
+    # Get unique GIs with aggregated info for assignment
+    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'Total GI Vol']].drop_duplicates('IssueNo')
+
+    # Separate single-line and multi-line GIs
+    single_line = gi_info[gi_info['Line Count'] == 1].copy()
+    multi_line = gi_info[gi_info['Line Count'] > 1].copy()
+
+    # ----------- Single-line assignment -----------
+    job_no_counter = 1
+    single_line['Job No'] = None
+
+    # Group by ShipToName and assign Job No with max 5 GIs per Job No
+    for shipto, group in single_line.groupby('ShipToName'):
+        issues = group['IssueNo'].tolist()
+        # Split into chunks of max 5
+        chunks = [issues[i:i+5] for i in range(0, len(issues), 5)]
+        for chunk in chunks:
+            job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+            single_line.loc[single_line['IssueNo'].isin(chunk), 'Job No'] = job_no_str
+            job_no_counter += 1
+
+    # Now combine small job groups (with 2 or fewer GIs) even if ShipToName differs, but max 5 total GIs per Job No
+    job_counts = single_line.groupby('Job No').size()
+    small_jobs = job_counts[job_counts <= 2].index.tolist()
+
+    if len(small_jobs) > 1:
+        combined_issues = single_line[single_line['Job No'].isin(small_jobs)]['IssueNo'].tolist()
+        # Reassign combined job Nos in groups of max 5
+        chunks = [combined_issues[i:i+5] for i in range(0, len(combined_issues), 5)]
+        for i, chunk in enumerate(chunks):
+            job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+            single_line.loc[single_line['IssueNo'].isin(chunk), 'Job No'] = job_no_str
+            job_no_counter += 1
+
+    # ----------- Multi-line assignment -----------
+    multi_line['Job No'] = None
+    current_job_issues = []
+    current_job_vol = 0
+    for idx, row in multi_line.iterrows():
+        vol = row['Total GI Vol']
+        if current_job_vol + vol > 600000:
+            # Assign current job number
+            job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+            multi_line.loc[multi_line['IssueNo'].isin(current_job_issues), 'Job No'] = job_no_str
+            job_no_counter += 1
+            # Reset
+            current_job_issues = [row['IssueNo']]
+            current_job_vol = vol
+        else:
+            current_job_issues.append(row['IssueNo'])
+            current_job_vol += vol
+
+    # Assign last batch
+    if current_job_issues:
+        job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+        multi_line.loc[multi_line['IssueNo'].isin(current_job_issues), 'Job No'] = job_no_str
+        job_no_counter += 1
+
+    # Merge back Job No to original df
+    job_no_map = pd.concat([single_line[['IssueNo', 'Job No']], multi_line[['IssueNo', 'Job No']]])
+    df = df.merge(job_no_map.drop_duplicates('IssueNo'), on='IssueNo', how='left')
 
     return df
 
@@ -131,7 +211,7 @@ def finalize_output(df, gi_type):
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
         'Commercial Box Count', 'DeliveryDate', 'ShipToName',
-        'Type', 'CartonDescription', 'Total GI Vol'
+        'Type', 'CartonDescription', 'Total GI Vol', 'Job No'
     ]].drop_duplicates()
 
 def export_to_excel(output_df):
@@ -167,6 +247,7 @@ def export_to_excel(output_df):
 
     return output
 
+
 # ------------------------ MAIN LOGIC ------------------------
 
 def main():
@@ -183,6 +264,10 @@ def main():
         picking_pool = apply_delivery_date_filter(picking_pool, delivery_range)
         df = merge_and_clean(picking_pool, sku_master)
         df = classify_and_assign(df)
+
+        # Assign job numbers with the advanced logic
+        df = assign_job_numbers_advanced(df)
+
         output_df = finalize_output(df, gi_type)
 
         st.success("✅ Processing complete!")
