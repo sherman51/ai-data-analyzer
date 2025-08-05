@@ -4,8 +4,8 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # ------------------------ PAGE CONFIG ------------------------
-st.set_page_config(page_title="📊 Good Receive Analysis Dashboard", layout="wide")
-st.title("📦 Good Receive Analysis Dashboard")
+st.set_page_config(page_title="📊 Good Issue Analysis Dashboard", layout="wide")
+st.title("📦 Good Issue Analysis Dashboard")
 
 # ------------------------ FILE UPLOAD ------------------------
 uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=["xlsx"])
@@ -105,4 +105,5 @@ if uploaded_file:
 
 else:
     st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
 
