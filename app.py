@@ -63,7 +63,7 @@ def load_data(picking_pool_file, sku_master_file):
 
     picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
     picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-    picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.strftime("%Y-%m-%d")
+    picking_pool['Delivery Date'] = picking_pool['DeliveryDate'].dt.strftime("%Y-%m-%d")
 
     return picking_pool, sku_master
 
@@ -241,7 +241,7 @@ def finalize_output(df, gi_type):
 
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
-        'Commercial Box Count', 'DeliveryDate', 'ShipToName',
+        'Commercial Box Count', 'Delivery Date', 'ShipToName',
         'Type', 'Job No', 'CartonDescription'
     ]].drop_duplicates()
 
@@ -323,6 +323,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
