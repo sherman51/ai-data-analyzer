@@ -7,31 +7,32 @@ import numpy as np
 # ----------------------------
 
 @st.cache_data
+@st.cache_data
 def load_data(file_path):
-    # Read Excel
-    df_raw = pd.read_excel(file_path, sheet_name="GIanalysis")
+    # Skip first 4 rows, row 5 becomes header
+    df = pd.read_excel(file_path, sheet_name="GIanalysis", skiprows=4)
 
-    # Find header row (row 3 has column names)
-    df = df_raw.iloc[5:].copy()
-    df.columns = [
-        "Account", "GINo", "CustRef", "Type", "Priority", "PONumber",
-        "ShippedOn", "CreatedOn", "ExpectedDate", "ShipToCode",
-        "Unknown1", "Unknown2", "Storage Location", "Batch Number",
-        "Lot7/Min Temperature", "Lot8/Max Temperature",
-        "Inventory Condition", "Lot10/Temperature", "Package Size",
-        "WorkOrderNo", "AddDate", "EditDate"
-    ][:len(df_raw.columns)]  # Map first 22 columns meaningfully
+    # Drop columns with all NaNs or unnamed
+    df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
 
-    # Convert date columns
-    date_cols = ["ShippedOn", "CreatedOn", "ExpectedDate", "AddDate", "EditDate"]
+    # Ensure key columns exist
+    expected_cols = ["Account", "GINo", "CustRef", "Priority", "PONumber",
+                     "ShippedOn", "CreatedOn", "ExpectedDate", "ShipToCode"]
+    # Only keep those that exist in file
+    df = df[[col for col in expected_cols if col in df.columns]]
+
+    # Convert relevant date columns to datetime
+    date_cols = ["ShippedOn", "CreatedOn", "ExpectedDate"]
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Drop rows with missing GINo (not valid data)
-    df = df[df["GINo"].notna()]
+    # Drop rows without GI number (invalid)
+    if "GINo" in df.columns:
+        df = df[df["GINo"].notna()]
 
     return df
+
 
 # ----------------------------
 # Metrics Computation
@@ -122,4 +123,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
