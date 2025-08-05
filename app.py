@@ -208,7 +208,7 @@ if picking_pool_file and sku_master_file:
 
         output_df = final_df[[
             'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
-            'Qty per Carton', 'Commercial Box Count', 'DeliveryDate', 'ShipToName',
+             'Commercial Box Count', 'DeliveryDate', 'ShipToName',
             'Type', 'JobNo', 'CartonDescription', 'Total GI Vol'
         ]].drop_duplicates()
 
@@ -261,6 +261,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
