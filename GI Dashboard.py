@@ -1,140 +1,108 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import plotly.express as px
+from datetime import datetime, timedelta
 
-# ----------------------------
-# Data Loading & Cleaning
-# ----------------------------
+# ------------------------ PAGE CONFIG ------------------------
+st.set_page_config(page_title="📊 Good Receive Analysis Dashboard", layout="wide")
+st.title("📦 Good Receive Analysis Dashboard")
 
-@st.cache_data
-def load_data(file_path):
-    # Skip first 4 rows to get proper headers
-    df = pd.read_excel(file_path, sheet_name="GIanalysis", skiprows=4)
+# ------------------------ FILE UPLOAD ------------------------
+uploaded_file = st.sidebar.file_uploader("Upload Excel File", type=["xlsx"])
 
-    # Drop empty unnamed columns
-    df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
+if uploaded_file:
+    # Skip metadata rows, header starts on row 6 (index 5)
+    df_raw = pd.read_excel(uploaded_file, skiprows=5)
 
-    # Convert relevant date columns
-    date_cols = ["ShippedOn", "CreatedOn", "ExpectedDate", "AddDate", "EditDate"]
-    for col in date_cols:
+    # Clean up
+    df = df_raw.dropna(axis=1, how="all")  # Remove empty columns
+    df.dropna(how="all", inplace=True)     # Remove empty rows
+
+    # Parse date columns
+    date_columns = ["ExpectedDate", "GateInDate", "GRDate", "CreatedOn", "FinalizedOn"]
+    for col in date_columns:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Map Priority values (normalize)
-    if "Priority" in df.columns:
-        priority_map = {
-            "3-ADHOC Urgent": "ADHOC Urgent",
-            "1-Normal": "Normal"
-        }
-        df["Priority"] = df["Priority"].replace(priority_map)
+    # Sidebar Filters
+    st.sidebar.header("🔍 Filters")
+    supplier_list = df["Supplier"].dropna().unique().tolist() if "Supplier" in df.columns else []
+    gr_type_list = df["GRType"].dropna().unique().tolist() if "GRType" in df.columns else []
 
-    # Drop rows missing GI No
-    if "GINo" in df.columns:
-        df = df[df["GINo"].notna()]
+    supplier_filter = st.sidebar.multiselect("Select Supplier", supplier_list, default=supplier_list)
+    gr_type_filter = st.sidebar.multiselect("Select GR Type", gr_type_list, default=gr_type_list)
 
-    return df
+    if "Supplier" in df.columns:
+        df = df[df["Supplier"].isin(supplier_filter)]
+    if "GRType" in df.columns:
+        df = df[df["GRType"].isin(gr_type_filter)]
 
-# ----------------------------
-# Metrics Computation
-# ----------------------------
+    # ------------------------ DATA PREVIEW ------------------------
+    st.subheader("🧹 Cleaned Dataset Preview")
+    st.dataframe(df.head(50), use_container_width=True)
 
-def compute_metrics(df):
-    # Filter last 6 months
-    today = pd.Timestamp.today()
-    six_months_ago = today - pd.DateOffset(months=6)
-    df_6m = df[df["CreatedOn"] >= six_months_ago]
+    # ------------------------ SUMMARY METRICS ------------------------
+    st.subheader("📈 Summary Metrics")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total GRNs", df["GRNO"].nunique() if "GRNO" in df.columns else "N/A")
+    with col2:
+        st.metric("Unique Suppliers", df["Supplier"].nunique() if "Supplier" in df.columns else "N/A")
+    with col3:
+        st.metric("Total Rows", len(df))
 
-    # KPI metrics
-    total_gi_lines = len(df_6m)
-    outstanding_orders = df[df["ShippedOn"].isna()]
-    urgent_orders = df[df["Priority"] == "ADHOC Urgent"]
+    # ------------------------ VISUALIZATION 1: MONTHLY GR SUMMARY ------------------------
+    st.subheader("📊 Monthly GR Summary (Grouped by GRDate)")
 
-    # Top 10 SKUs
-    if "SKUCode" in df_6m.columns:
-        top_skus = (
-            df_6m["SKUCode"]
-            .value_counts()
-            .head(10)
-            .reset_index()
-            .rename(columns={"index": "SKUCode", "SKUCode": "Count"})
+    if "GRDate" in df.columns:
+        df_monthly = df.dropna(subset=["GRDate"]).copy()
+        df_monthly["GR_Month"] = df_monthly["GRDate"].dt.to_period("M").astype(str)
+        month_summary = df_monthly.groupby("GR_Month").size().reset_index(name="Total GRs")
+
+        fig1 = px.bar(
+            month_summary,
+            x="GR_Month",
+            y="Total GRs",
+            text="Total GRs",
+            title="Monthly GR Summary",
+            labels={"GR_Month": "Month", "Total GRs": "Goods Received"},
         )
+        fig1.update_traces(textposition="outside")
+        fig1.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig1, use_container_width=True)
+
     else:
-        top_skus = pd.DataFrame(columns=["SKUCode", "Count"])
+        st.info("GRDate column not found, can't plot monthly summary.")
 
-    # Monthly trend
-    monthly_trend = (
-        df_6m.groupby(pd.Grouper(key="CreatedOn", freq="M"))["GINo"]
-        .count()
-        .reset_index()
-        .rename(columns={"GINo": "GI Lines"})
-    )
+    # ------------------------ VISUALIZATION 2: BAR CHART (Today vs Forecast) ------------------------
+    st.subheader("📦 Today's Progress & Upcoming Forecast")
 
-    # Priority breakdown
-    priority_breakdown = df_6m["Priority"].value_counts().reset_index()
-    priority_breakdown.columns = ["Priority", "Count"]
+    if "ExpectedDate" in df.columns:
+        today = pd.to_datetime(datetime.now().date())
+        tomorrow = today + timedelta(days=1)
+        next_7 = today + timedelta(days=7)
 
-    return {
-        "total_gi_lines": total_gi_lines,
-        "outstanding_count": len(outstanding_orders),
-        "urgent_count": len(urgent_orders),
-        "top_skus": top_skus,
-        "monthly_trend": monthly_trend,
-        "priority_breakdown": priority_breakdown,
-        "urgent_orders_table": urgent_orders[["GINo", "Account", "SKUCode", "ShipToCode", "CreatedOn"]]
-    }
+        df_expected = df.dropna(subset=["ExpectedDate"])
 
-# ----------------------------
-# Streamlit Dashboard
-# ----------------------------
+        today_count = df_expected[df_expected["ExpectedDate"].dt.date == today.date()].shape[0]
+        tomorrow_count = df_expected[df_expected["ExpectedDate"].dt.date == tomorrow.date()].shape[0]
+        next_7_count = df_expected[
+            (df_expected["ExpectedDate"].dt.date > tomorrow.date()) &
+            (df_expected["ExpectedDate"].dt.date <= next_7.date())
+        ].shape[0]
 
-def main():
-    st.set_page_config(page_title="Goods Issue Dashboard", layout="wide", initial_sidebar_state="expanded")
-    st.title("📦 Goods Issue Dashboard")
+        forecast_df = pd.DataFrame({
+            "Period": ["Today", "Tomorrow", "Next 7 Days"],
+            "Expected GRs": [today_count, tomorrow_count, next_7_count]
+        })
 
-    # File uploader
-    uploaded_file = st.file_uploader("Upload Goods Issue Excel", type=["xlsx"])
-    if uploaded_file is None:
-        st.warning("Please upload the Goods Issue Excel file to proceed.")
-        return
+        fig2 = px.bar(forecast_df, x="Period", y="Expected GRs", text="Expected GRs",
+                      title="GR Forecast", color="Period")
+        st.plotly_chart(fig2, use_container_width=True)
 
-    # Load & process
-    df = load_data(uploaded_file)
-    metrics = compute_metrics(df)
-
-    # KPI Cards
-    st.subheader("Key Metrics (Last 6 Months)")
-    kpi1, kpi2, kpi3 = st.columns(3)
-    kpi1.metric("Total GI Lines", metrics["total_gi_lines"])
-    kpi2.metric("Outstanding Orders", metrics["outstanding_count"])
-    kpi3.metric("ADHOC Urgent Orders", metrics["urgent_count"])
-
-    # Monthly Trend
-    st.subheader("Monthly GI Lines Trend (Last 6 Months)")
-    if not metrics["monthly_trend"].empty:
-        st.line_chart(metrics["monthly_trend"].set_index("CreatedOn"))
     else:
-        st.info("No data for the last 6 months.")
+        st.warning("ExpectedDate column not found. Forecast chart not available.")
 
-    # Priority Breakdown
-    st.subheader("Priority Breakdown (Last 6 Months)")
-    if not metrics["priority_breakdown"].empty:
-        st.bar_chart(metrics["priority_breakdown"].set_index("Priority"))
-    else:
-        st.info("No priority data available.")
+else:
+    st.info("⬅ Please upload a Good Receive Excel file to begin.")
 
-    # Top 10 SKUs
-    st.subheader("Top 10 SKUs (Last 6 Months)")
-    if not metrics["top_skus"].empty:
-        st.bar_chart(metrics["top_skus"].set_index("SKUCode"))
-    else:
-        st.info("No SKU data available.")
-
-    # Urgent Orders Table
-    st.subheader("Current ADHOC Urgent Orders")
-    if not metrics["urgent_orders_table"].empty:
-        st.dataframe(metrics["urgent_orders_table"])
-    else:
-        st.success("No ADHOC Urgent orders at the moment.")
-
-if __name__ == "__main__":
-    main()
