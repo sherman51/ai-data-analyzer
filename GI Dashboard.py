@@ -37,6 +37,12 @@ if uploaded_file:
     if "GRType" in df.columns:
         df = df[df["GRType"].isin(gr_type_filter)]
 
+    gender = st.sidebar.multiselect(
+    "Select the Gender:",
+    options=df["Gender"].unique(),
+    default=df["Gender"].unique()
+)
+
     # ------------------------ DATA PREVIEW ------------------------
     st.subheader("🧹 Cleaned Dataset Preview")
     st.dataframe(df.head(50), use_container_width=True)
@@ -105,5 +111,6 @@ if uploaded_file:
 
 else:
     st.info("⬅ Please upload a Good Issue Excel file to begin.")
+
 
 
