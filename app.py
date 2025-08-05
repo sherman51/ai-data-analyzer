@@ -5,6 +5,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 from itertools import cycle
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
@@ -316,8 +317,10 @@ def main():
 
         output = export_to_excel(output_df)
 
-        raw_timestamp = datetime.now().strftime("%d %b - %H:%M")
-        safe_timestamp = raw_timestamp.replace(":", "-")  # Replace colon to make it filename-safe
+        now = datetime.now(ZoneInfo("Asia/Singapore"))
+        
+        raw_timestamp = now.strftime("%d %b - %H:%M")
+        safe_timestamp = raw_timestamp.replace(":", "-")
         filename = f"master_pick_ticket_{safe_timestamp}.xlsx"
         
         st.download_button(
@@ -337,6 +340,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
