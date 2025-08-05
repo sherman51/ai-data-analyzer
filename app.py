@@ -146,38 +146,56 @@ if picking_pool_file and sku_master_file:
         # Combine all single-line jobs
         single_line_final_jobs = pd.concat(single_line_assignments) if single_line_assignments else pd.DataFrame(columns=['IssueNo', 'JobNo'])
         
-        # --- Assign JobNos to Multi-line GIs ---
-        multi_line_gis = multi_line_gis.sort_values(by="Total_GI_Vol", ascending=False)
+        # -------------------------------
+        # Step 1: Work only on unique multi-line GIs
+        # -------------------------------
         
-        multi_line_jobs = []
-        job_limits = []
+        multi_line_gis_unique = multi_line_gis[['IssueNo', 'Total_GI_Vol']].drop_duplicates()
+        
+        # Sort largest GIs first
+        multi_line_gis_unique = multi_line_gis_unique.sort_values(by="Total_GI_Vol", ascending=False)
+        
+        multi_line_jobs = []  # each job is a list of tuples (IssueNo, Vol)
+        job_limits = []       # running total volume for each JobNo
         max_vol = 600000
         
-        for _, row in multi_line_gis.iterrows():
+        # -------------------------------
+        # Step 2: Greedy bin-packing with volume cap
+        # -------------------------------
+        for _, row in multi_line_gis_unique.iterrows():
             issue_no = row['IssueNo']
             volume = row['Total_GI_Vol']
             placed = False
+        
             for i, used_vol in enumerate(job_limits):
                 if used_vol + volume <= max_vol:
                     multi_line_jobs[i].append((issue_no, volume))
                     job_limits[i] += volume
                     placed = True
                     break
+        
             if not placed:
                 multi_line_jobs.append([(issue_no, volume)])
                 job_limits.append(volume)
         
-        # Create job number mapping
-        multi_line_assignments = []
+        # -------------------------------
+        # Step 3: Assign JobNos
+        # -------------------------------
+        
+        job_counter = 1  # you can change this starting number
+        issue_job_map = {}
+        
         for i, job in enumerate(multi_line_jobs, start=job_counter):
             job_no = f"Job{str(i).zfill(3)}"
-            total_vol = sum(vol for _, vol in job)
-            if total_vol > max_vol:
-                st.warning(f"⚠️ {job_no} exceeds 600000 vol: {total_vol}")
             for issue_no, _ in job:
-                multi_line_assignments.append({'IssueNo': issue_no, 'JobNo': job_no})
+                issue_job_map[issue_no] = job_no
         
-        multi_line_final_jobs = pd.DataFrame(multi_line_assignments)
+        # -------------------------------
+        # Step 4: Apply JobNos back to full df (SKU-level)
+        # -------------------------------
+        
+        df['JobNo'] = df['IssueNo'].map(issue_job_map)
+
         
         # --- Merge assigned JobNos back to the grouped gi_summary ---
         jobno_summary = pd.concat([single_line_final_jobs[['IssueNo', 'JobNo']], multi_line_final_jobs], ignore_index=True)
@@ -261,6 +279,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
