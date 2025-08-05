@@ -117,7 +117,7 @@ if picking_pool_file and sku_master_file:
         df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
         df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
 
-        # --- Group by IssueNo to get Total GI Vol ---
+        # --- Group by IssueNo to get Total GI Vol and Line Count ---
         gi_summary = (
             df.groupby('IssueNo')
             .agg(
@@ -132,7 +132,7 @@ if picking_pool_file and sku_master_file:
         single_line_gis = gi_summary[gi_summary['Line_Count'] == 1].copy()
         multi_line_gis = gi_summary[gi_summary['Line_Count'] > 1].copy()
         
-        # --- Assign Jobs to Single Line GIs ---
+        # --- Assign JobNos to Single-line GIs ---
         job_counter = 1
         single_line_assignments = []
         
@@ -143,44 +143,48 @@ if picking_pool_file and sku_master_file:
             job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
             single_line_assignments.append(group)
         
-        single_line_final_jobs = pd.concat(single_line_assignments)
+        # Combine all single-line jobs
+        single_line_final_jobs = pd.concat(single_line_assignments) if single_line_assignments else pd.DataFrame(columns=['IssueNo', 'JobNo'])
         
-        # --- Assign Jobs to Multi-line GIs ---
-        multi_summary = multi_line_gis.sort_values(by="Total_GI_Vol", ascending=False)
+        # --- Assign JobNos to Multi-line GIs ---
+        multi_line_gis = multi_line_gis.sort_values(by="Total_GI_Vol", ascending=False)
         
-        jobs = []
+        multi_line_jobs = []
         job_limits = []
         max_vol = 600000
         
-        for _, row in multi_summary.iterrows():
+        for _, row in multi_line_gis.iterrows():
             issue_no = row['IssueNo']
             volume = row['Total_GI_Vol']
             placed = False
             for i, used_vol in enumerate(job_limits):
                 if used_vol + volume <= max_vol:
-                    jobs[i].append((issue_no, volume))
+                    multi_line_jobs[i].append((issue_no, volume))
                     job_limits[i] += volume
                     placed = True
                     break
             if not placed:
-                jobs.append([(issue_no, volume)])
+                multi_line_jobs.append([(issue_no, volume)])
                 job_limits.append(volume)
         
-        job_assignments = {}
-        for i, job in enumerate(jobs, start=job_counter):
+        # Create job number mapping
+        multi_line_assignments = []
+        for i, job in enumerate(multi_line_jobs, start=job_counter):
             job_no = f"Job{str(i).zfill(3)}"
             total_vol = sum(vol for _, vol in job)
             if total_vol > max_vol:
                 st.warning(f"⚠️ {job_no} exceeds 600000 vol: {total_vol}")
             for issue_no, _ in job:
-                job_assignments[issue_no] = job_no
+                multi_line_assignments.append({'IssueNo': issue_no, 'JobNo': job_no})
         
-        # --- Combine all JobNo mappings back to df ---
-        jobno_map = {
-            **dict(zip(single_line_final_jobs['IssueNo'], single_line_final_jobs['JobNo'])),
-            **job_assignments
-        }
-        df['JobNo'] = df['IssueNo'].map(jobno_map)
+        multi_line_final_jobs = pd.DataFrame(multi_line_assignments)
+        
+        # --- Merge assigned JobNos back to the grouped gi_summary ---
+        jobno_summary = pd.concat([single_line_final_jobs[['IssueNo', 'JobNo']], multi_line_final_jobs], ignore_index=True)
+        
+        # --- Map JobNos back to full dataframe ---
+        df['JobNo'] = df['IssueNo'].map(jobno_summary.set_index('IssueNo')['JobNo'])
+
 
         
         # --- Final filtering by GI type ---
@@ -257,6 +261,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
