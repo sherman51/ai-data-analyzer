@@ -55,7 +55,7 @@ def compute_metrics(df):
         .value_counts()
         .head(10)
         .reset_index()
-        .rename(columns={"index": "SKU", "PONumber": "Count"})
+        .rename(columns={"index": "SKUCode", "PONumber": "Count"})
     )
 
     # Monthly trend
@@ -123,5 +123,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
