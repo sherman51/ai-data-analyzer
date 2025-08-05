@@ -320,7 +320,7 @@ def main():
         now = datetime.now(ZoneInfo("Asia/Singapore"))
         
         raw_timestamp = now.strftime("%d %b - %H:%M")
-        safe_timestamp = raw_timestamp.replace(":", "-")
+        safe_timestamp = raw_timestamp
         filename = f"master_pick_ticket_{safe_timestamp}.xlsx"
         
         st.download_button(
@@ -340,6 +340,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
