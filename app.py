@@ -121,7 +121,9 @@ if picking_pool_file and sku_master_file:
         gi_summary = (
             df.groupby('IssueNo')
             .agg(
-                Total_GI_Vol=('Total Item Vol', 'sum')
+                Total_GI_Vol=('Total Item Vol', 'sum'),
+                Line_Count=('SKU', 'count'),
+                ShipToName=('ShipToName', 'first')
             )
             .reset_index()
         )
@@ -259,8 +261,6 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
-
 
 
 
