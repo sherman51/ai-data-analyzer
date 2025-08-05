@@ -91,9 +91,6 @@ def main():
     st.set_page_config(page_title="Goods Issue Dashboard", layout="wide", initial_sidebar_state="expanded")
     st.title("📦 Goods Issue Dashboard")
 
-    # Auto-refresh every 60 seconds
-    st_autorefresh = st.experimental_rerun
-
     # File uploader
     uploaded_file = st.file_uploader("Upload Goods Issue Excel", type=["xlsx"])
     if uploaded_file is None:
@@ -141,3 +138,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
