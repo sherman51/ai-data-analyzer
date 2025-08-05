@@ -189,7 +189,7 @@ if picking_pool_file and sku_master_file:
             df = df[df['Line Count'] > 1]
         
         # --- Continue with carton and output logic ---
-        df = pd.concat([df, df.apply(calculate_carton_info, axis=1)], axis=1)
+        df[['CartonCount', 'CartonDescription']] = df.apply(calculate_carton_info, axis=1)
         df['Batch No'] = df.get('StorageLocation')
         df['Commercial Box Count'] = df['PickingQty'] / df['Qty Commercial Box']
         
@@ -200,10 +200,6 @@ if picking_pool_file and sku_master_file:
             final_df = final_df[final_df['Line Count'] == 1]
         elif gi_type == "Multi-line":
             final_df = final_df[final_df['Line Count'] > 1]
-
-        final_df = pd.concat([final_df, final_df.apply(calculate_carton_info, axis=1)], axis=1)
-        final_df['Batch No'] = final_df.get('StorageLocation')
-        final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
         output_df = final_df[[
             'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
@@ -260,6 +256,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
