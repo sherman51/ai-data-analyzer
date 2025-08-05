@@ -297,7 +297,7 @@ def main():
         df = classify_and_assign(df)
 
         # Assign job numbers with the advanced logic
-        df = assign_job_numbers_advanced(df)
+        df = assign_job_numbers_with_scenarios(df)
 
         output_df = finalize_output(df, gi_type)
 
@@ -323,4 +323,5 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
