@@ -1,62 +1,65 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+from datetime import datetime
 
 # ----------------------------
-# Data Cleaning & Preparation
+# Data Loading & Cleaning
 # ----------------------------
 
-@st.cache_data
 @st.cache_data
 def load_data(file_path):
-    # Skip first 4 rows, row 5 becomes header
+    # Skip first 4 rows to get proper headers
     df = pd.read_excel(file_path, sheet_name="GIanalysis", skiprows=4)
 
-    # Drop columns with all NaNs or unnamed
+    # Drop empty unnamed columns
     df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
 
-    # Ensure key columns exist
-    expected_cols = ["Account", "GINo", "CustRef", "Priority", "PONumber",
-                     "ShippedOn", "CreatedOn", "ExpectedDate", "ShipToCode"]
-    # Only keep those that exist in file
-    df = df[[col for col in expected_cols if col in df.columns]]
-
-    # Convert relevant date columns to datetime
-    date_cols = ["ShippedOn", "CreatedOn", "ExpectedDate"]
+    # Convert relevant date columns
+    date_cols = ["ShippedOn", "CreatedOn", "ExpectedDate", "AddDate", "EditDate"]
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Drop rows without GI number (invalid)
+    # Map Priority values (normalize)
+    if "Priority" in df.columns:
+        priority_map = {
+            "3-ADHOC Urgent": "ADHOC Urgent",
+            "1-Normal": "Normal"
+        }
+        df["Priority"] = df["Priority"].replace(priority_map)
+
+    # Drop rows missing GI No
     if "GINo" in df.columns:
         df = df[df["GINo"].notna()]
 
     return df
-
 
 # ----------------------------
 # Metrics Computation
 # ----------------------------
 
 def compute_metrics(df):
-    # Last 6 months filter
+    # Filter last 6 months
     today = pd.Timestamp.today()
     six_months_ago = today - pd.DateOffset(months=6)
     df_6m = df[df["CreatedOn"] >= six_months_ago]
 
-    # KPI Metrics
+    # KPI metrics
     total_gi_lines = len(df_6m)
     outstanding_orders = df[df["ShippedOn"].isna()]
-    urgent_orders = df[df["Priority"].str.contains("3-ADHOC Urgent", na=False)]
+    urgent_orders = df[df["Priority"] == "ADHOC Urgent"]
 
-    # Top 10 SKUs (assuming PONumber is SKU)
-    top_skus = (
-        df_6m["PONumber"]
-        .value_counts()
-        .head(10)
-        .reset_index()
-        .rename(columns={"index": "SKUCode", "PONumber": "Count"})
-    )
+    # Top 10 SKUs
+    if "SKUCode" in df_6m.columns:
+        top_skus = (
+            df_6m["SKUCode"]
+            .value_counts()
+            .head(10)
+            .reset_index()
+            .rename(columns={"index": "SKUCode", "SKUCode": "Count"})
+        )
+    else:
+        top_skus = pd.DataFrame(columns=["SKUCode", "Count"])
 
     # Monthly trend
     monthly_trend = (
@@ -77,16 +80,19 @@ def compute_metrics(df):
         "top_skus": top_skus,
         "monthly_trend": monthly_trend,
         "priority_breakdown": priority_breakdown,
-        "urgent_orders_table": urgent_orders[["GINo", "Account", "PONumber", "ShipToCode", "CreatedOn"]]
+        "urgent_orders_table": urgent_orders[["GINo", "Account", "SKUCode", "ShipToCode", "CreatedOn"]]
     }
 
 # ----------------------------
-# Streamlit UI
+# Streamlit Dashboard
 # ----------------------------
 
 def main():
-    st.set_page_config(page_title="Goods Issue Dashboard", layout="wide")
+    st.set_page_config(page_title="Goods Issue Dashboard", layout="wide", initial_sidebar_state="expanded")
     st.title("📦 Goods Issue Dashboard")
+
+    # Auto-refresh every 60 seconds
+    st_autorefresh = st.experimental_rerun
 
     # File uploader
     uploaded_file = st.file_uploader("Upload Goods Issue Excel", type=["xlsx"])
@@ -94,35 +100,44 @@ def main():
         st.warning("Please upload the Goods Issue Excel file to proceed.")
         return
 
-    # Load and process
+    # Load & process
     df = load_data(uploaded_file)
     metrics = compute_metrics(df)
 
-    # KPIs
+    # KPI Cards
     st.subheader("Key Metrics (Last 6 Months)")
     kpi1, kpi2, kpi3 = st.columns(3)
     kpi1.metric("Total GI Lines", metrics["total_gi_lines"])
     kpi2.metric("Outstanding Orders", metrics["outstanding_count"])
     kpi3.metric("ADHOC Urgent Orders", metrics["urgent_count"])
 
-    # Monthly trend chart
-    st.subheader("Monthly GI Lines Trend (6 months)")
-    st.line_chart(metrics["monthly_trend"].set_index("CreatedOn"))
+    # Monthly Trend
+    st.subheader("Monthly GI Lines Trend (Last 6 Months)")
+    if not metrics["monthly_trend"].empty:
+        st.line_chart(metrics["monthly_trend"].set_index("CreatedOn"))
+    else:
+        st.info("No data for the last 6 months.")
 
-    # Priority breakdown
-    st.subheader("Priority Breakdown")
-    st.bar_chart(metrics["priority_breakdown"].set_index("Priority"))
+    # Priority Breakdown
+    st.subheader("Priority Breakdown (Last 6 Months)")
+    if not metrics["priority_breakdown"].empty:
+        st.bar_chart(metrics["priority_breakdown"].set_index("Priority"))
+    else:
+        st.info("No priority data available.")
 
     # Top 10 SKUs
-    st.subheader("Top 10 SKUs (6 months)")
-    st.bar_chart(metrics["top_skus"].set_index("SKU"))
+    st.subheader("Top 10 SKUs (Last 6 Months)")
+    if not metrics["top_skus"].empty:
+        st.bar_chart(metrics["top_skus"].set_index("SKUCode"))
+    else:
+        st.info("No SKU data available.")
 
     # Urgent Orders Table
     st.subheader("Current ADHOC Urgent Orders")
-    st.dataframe(metrics["urgent_orders_table"])
+    if not metrics["urgent_orders_table"].empty:
+        st.dataframe(metrics["urgent_orders_table"])
+    else:
+        st.success("No ADHOC Urgent orders at the moment.")
 
 if __name__ == "__main__":
     main()
-
-
-
