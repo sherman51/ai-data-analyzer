@@ -1,10 +1,11 @@
+# Modified section of your Streamlit app - Full code with corrected multi-line JobNo logic
+
 import streamlit as st
 import pandas as pd
 from io import BytesIO
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 from itertools import cycle
-
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
@@ -14,7 +15,6 @@ st.title("📦 Master Pick Ticket Generator – Pick by Cart")
 st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
 sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=["xlsx"])
-
 
 # ------------------------ HELPER FUNCTIONS ------------------------
 def calculate_carton_info(row):
@@ -38,7 +38,6 @@ def calculate_carton_info(row):
     ]
 
     if loose > 0:
-        # For loose >=1, calculate loose volume normally
         looseVol = loose / qpco * iv
         looseBox = next(name for max_vol, name in carton_sizes if looseVol <= max_vol)
         desc = f"{cartons} Commercial Carton + {looseBox}" if cartons > 0 else looseBox
@@ -48,7 +47,6 @@ def calculate_carton_info(row):
         totalC = cartons
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
-
 
 def classify_gi(volume):
     if pd.isna(volume):
@@ -60,50 +58,26 @@ def classify_gi(volume):
     else:
         return 'Pick by Orders'
 
-
 # ------------------------ DATA PROCESSING ------------------------
 if picking_pool_file and sku_master_file:
     try:
         picking_pool = pd.read_excel(picking_pool_file)
         sku_master = pd.read_excel(sku_master_file)
 
-        # Convert to datetime safely
         picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
-        
-        # Keep only rows with valid (non-null) dates
         picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-        
-        # 👉 Use this for internal filtering or comparison (keep as datetime)
-        # e.g. picking_pool[picking_pool['DeliveryDate'] >= pd.Timestamp("2025-08-01")]
-        
-        # 👉 If you want to show it in a table nicely formatted:
         picking_pool['DeliveryDateStr'] = picking_pool['DeliveryDate'].dt.strftime("%Y-%m-%d")
 
-
-
-        # 🆕 Step 1: Standardize LocationType for filtering
         picking_pool['LocationType'] = picking_pool['LocationType'].astype(str).str.strip().str.lower()
-        
-        # 🆕 Step 2: Identify GRNOs that contain at least one line with LocationType == 'storage'
         grnos_with_storage = picking_pool[picking_pool['LocationType'] == 'storage']['IssueNo'].unique()
-        
-        # 🆕 Step 3: Exclude those GRNOs
         picking_pool = picking_pool[~picking_pool['IssueNo'].isin(grnos_with_storage)]
-        
-        # ✅ Step 4: Apply remaining filter: Zone = 'A', Location starts with A- or SOFT-
-        picking_pool = picking_pool[
-            (picking_pool['Zone'] == 'A') &
-            (
-                picking_pool['Location'].astype(str).str.startswith('A-') |
-                picking_pool['Location'].astype(str).str.startswith('SOFT-')
-            )
-        ]
+        picking_pool = picking_pool[(picking_pool['Zone'] == 'A') & (
+            picking_pool['Location'].astype(str).str.startswith('A-') |
+            picking_pool['Location'].astype(str).str.startswith('SOFT-')
+        )]
 
-
-        # Filter option
         gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
-        # Sidebar date input
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
         delivery_range = st.sidebar.date_input("🗕️ Filter by Delivery Date", (min_date, max_date), min_value=min_date, max_value=max_date)
 
@@ -111,7 +85,6 @@ if picking_pool_file and sku_master_file:
             start, end = pd.to_datetime(delivery_range[0]), pd.to_datetime(delivery_range[1])
             picking_pool = picking_pool[(picking_pool['DeliveryDate'] >= start) & (picking_pool['DeliveryDate'] <= end)]
 
-        # Remove GIs with missing info
         merged_check = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
         missing_issues = merged_check[
             merged_check['Qty Commercial Box'].isna() |
@@ -120,46 +93,33 @@ if picking_pool_file and sku_master_file:
         ]['IssueNo'].unique()
         picking_pool = picking_pool[~picking_pool['IssueNo'].isin(missing_issues)]
 
-        # Merge actual data
         df = picking_pool.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
-
-        # Fill & compute
         df['PickingQty'] = df['PickingQty'].fillna(0)
         df['Item Vol'] = df['Item Vol'].fillna(0)
         df['Qty Commercial Box'] = df['Qty Commercial Box'].replace(0, 1).fillna(1)
         df['Qty per Carton'] = df['Qty per Carton'].replace(0, 1).fillna(1)
         df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
 
-        # GI volume and line count
         df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
         df = df.merge(df.groupby('IssueNo').size().rename('Line Count'), on='IssueNo')
 
-        # Step 1: Ensure GI is classified as either "Bin" or "Layer" based on volume
         df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
         df = df[df['GI Class'].isin(['Bin', 'Layer'])]
 
-        
-        # Step 2: Separate the Bin and Layer classifications
         bin_gi_issues = df[df['GI Class'] == 'Bin']['IssueNo'].unique()
         layer_gi_issues = df[df['GI Class'] == 'Layer']['IssueNo'].unique()
-        
-        # Step 3: Assign unique BinNo and LayerNo for each GI
+
         bin_no_mapping = {issue: f"Bin{str(i+1).zfill(3)}" for i, issue in enumerate(sorted(bin_gi_issues))}
         layer_no_mapping = {issue: f"Layer{str(i+1).zfill(3)}" for i, issue in enumerate(sorted(layer_gi_issues))}
-        
-        # Assigning BinNo and LayerNo based on GI class
+
         df['BinNo'] = df['IssueNo'].map(bin_no_mapping)
         df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
-        
-        # Step 4: Now we can assign the Type based on the GI class (Bin or Layer) and the unique number
         df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
-        
-        
-        # Split data
+
         single_line = df[df['Line Count'] == 1].copy()
         multi_line = df[df['Line Count'] > 1].copy()
 
-        # Job Assignment - Single line
+        # --- Assign Jobs to Single Line GIs ---
         job_counter = 1
         single_jobs = []
         for name, group in single_line.groupby('ShipToName'):
@@ -170,131 +130,92 @@ if picking_pool_file and sku_master_file:
             single_jobs.append(group)
         single_line_final = pd.concat(single_jobs)
 
-        # First-Fit Decreasing Job Assignment for Multi-line GIs
-        multi_summary = (
-            multi_line[['IssueNo', 'Total GI Vol']]
-            .drop_duplicates()
-            .sort_values(by="Total GI Vol", ascending=False)
-        )
-    
-        
-        # FFD algorithm: Allocate to jobs
-        jobs = []  # list of job bins: each job is a list of (IssueNo, volume)
-        job_limits = []  # current volume used in each job
+        # --- Assign Jobs to Multi-line GIs ---
+        issue_vols = multi_line.groupby('IssueNo')['Total GI Vol'].first().to_dict()
+        multi_summary = pd.DataFrame(issue_vols.items(), columns=['IssueNo', 'Total GI Vol'])
+        multi_summary = multi_summary.sort_values(by='Total GI Vol', ascending=False)
+
+        jobs = []
+        job_limits = []
         max_vol = 600000
-        
+
         for _, row in multi_summary.iterrows():
-            issue_no = row["IssueNo"]
-            volume = row["Total GI Vol"]
+            issue_no = row['IssueNo']
+            volume = row['Total GI Vol']
             placed = False
-        
             for i, used_vol in enumerate(job_limits):
                 if used_vol + volume <= max_vol:
                     jobs[i].append((issue_no, volume))
                     job_limits[i] += volume
                     placed = True
                     break
-        
             if not placed:
-                # create new job
                 jobs.append([(issue_no, volume)])
                 job_limits.append(volume)
-        
-        # Map IssueNo to JobNo
+
         job_assignments = {}
-        for i, job in enumerate(jobs, start=job_counter):  # start from existing job_counter
+        for i, job in enumerate(jobs, start=job_counter):
             job_no = f"Job{str(i).zfill(3)}"
+            total_vol = sum(vol for _, vol in job)
+            if total_vol > max_vol:
+                st.warning(f"⚠️ {job_no} exceeds 600000 vol: {total_vol}")
             for issue_no, _ in job:
                 job_assignments[issue_no] = job_no
-        
-        # Apply job numbers to multi_line
+
         multi_line['JobNo'] = multi_line['IssueNo'].map(job_assignments)
-        
-        # Update job_counter for next use (optional, if more jobs come after)
-        job_counter += len(jobs)
 
-
-        # Combine all
+        # Combine final
         final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
-        # GI type filter
         if gi_type == "Single-line":
             final_df = final_df[final_df['Line Count'] == 1]
         elif gi_type == "Multi-line":
             final_df = final_df[final_df['Line Count'] > 1]
 
-        # Carton Info
         final_df = pd.concat([final_df, final_df.apply(calculate_carton_info, axis=1)], axis=1)
-
-        # Extra columns
         final_df['Batch No'] = final_df.get('StorageLocation')
         final_df['Commercial Box Count'] = final_df['PickingQty'] / final_df['Qty Commercial Box']
 
-        output_df = final_df[[ 
-            'IssueNo',
-            'SKU',
-            'Location_x',
-            'SKUDescription',
-            'Batch No',
-            'PickingQty',
-            'Qty per Carton',
-            'Commercial Box Count',
-            'DeliveryDate',
-            'ShipToName',
-            'Type',
-            'JobNo',
-            'CartonDescription',
-            'Total GI Vol'
+        output_df = final_df[[
+            'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
+            'Qty per Carton', 'Commercial Box Count', 'DeliveryDate', 'ShipToName',
+            'Type', 'JobNo', 'CartonDescription', 'Total GI Vol'
         ]].drop_duplicates()
 
         st.success("✅ Processing complete!")
         st.dataframe(output_df.head(20))
 
-        # --- Write to Excel and Apply Autofit and Highlighting ---
-        output = BytesIO()  # Initialize output here
-        
+        # --- Excel Export ---
+        output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             output_df.to_excel(writer, index=False, sheet_name='Master Pick Ticket')
-            workbook = writer.book
             worksheet = writer.sheets['Master Pick Ticket']
-            
-            # --- Autofit column widths ---
+
             for col_idx, column_cells in enumerate(worksheet.columns, 1):
                 max_length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
-                adjusted_width = max_length + 2
-                worksheet.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
-            
-            # --- Identify SKUs with Different Batch Nos ---
-            # Group by SKU and Batch No, and find if there are multiple different Batch Nos for the same SKU
-            sku_batch_group = output_df.groupby('SKU')['Batch No'].nunique()  # Count unique Batch Nos for each SKU
-            skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index  # Find SKUs with more than 1 Batch No
-            
-            # --- Prepare Lighter Shades of Yellow ---
+                worksheet.column_dimensions[get_column_letter(col_idx)].width = max_length + 2
+
+            sku_batch_group = output_df.groupby('SKU')['Batch No'].nunique()
+            skus_with_diff_batch = sku_batch_group[sku_batch_group > 1].index
+
             color_cycle = cycle([
-                PatternFill(start_color="CCC0DA", end_color="CCC0DA", fill_type="solid"),  # Purple
-                PatternFill(start_color="FCD5B4", end_color="FCD5B4", fill_type="solid"),  # Orange
-                PatternFill(start_color="E6B8B7", end_color="E6B8B7", fill_type="solid"),  # Red
-                PatternFill(start_color="D8E4BC", end_color="D8E4BC", fill_type="solid"),  # Green
-                PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid"),  # Yellow                                                                        
+                PatternFill(start_color="CCC0DA", end_color="CCC0DA", fill_type="solid"),
+                PatternFill(start_color="FCD5B4", end_color="FCD5B4", fill_type="solid"),
+                PatternFill(start_color="E6B8B7", end_color="E6B8B7", fill_type="solid"),
+                PatternFill(start_color="D8E4BC", end_color="D8E4BC", fill_type="solid"),
+                PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid"),
             ])
-            
-            # --- Highlight Rows for SKUs with Multiple Batch Nos ---
-            sku_color_map = {}
-            for sku in skus_with_diff_batch:
-                sku_color_map[sku] = next(color_cycle)  # Assign a unique color from the cycle
-            
+
+            sku_color_map = {sku: next(color_cycle) for sku in skus_with_diff_batch}
+
             for row in worksheet.iter_rows(min_row=2, min_col=1, max_col=worksheet.max_column):
-                for cell in row:
-                    if cell.column == 2:  # Assuming "SKU" is in the 2nd column (adjust as needed)
-                        if cell.value in skus_with_diff_batch:  # If the SKU has multiple different Batch Nos
-                            color_fill = sku_color_map[cell.value]  # Get the color for this SKU
-                            for row_cell in row:  # Highlight the entire row
-                                row_cell.fill = color_fill  # Apply color to all cells in the row
-        
-            # Write to buffer and prepare for download
-            output.seek(0)  # Go to the beginning of the buffer
-        
-        # Download link
+                sku_cell = row[1]
+                if sku_cell.value in sku_color_map:
+                    for cell in row:
+                        cell.fill = sku_color_map[sku_cell.value]
+
+            output.seek(0)
+
         st.download_button(
             label="Download Master Pick Ticket",
             data=output,
@@ -302,7 +223,6 @@ if picking_pool_file and sku_master_file:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # Store for AI
         st.session_state["final_df"] = final_df
 
     except Exception as e:
@@ -310,28 +230,3 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
