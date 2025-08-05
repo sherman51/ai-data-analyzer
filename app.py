@@ -104,7 +104,8 @@ if picking_pool_file and sku_master_file:
         df = df.merge(df.groupby('IssueNo').size().rename('Line Count'), on='IssueNo')
 
         df['GI Class'] = df['Total GI Vol'].apply(classify_gi)
-        df = df[df['GI Class'].isin(['Bin', 'Layer'])]
+        df = df[df['Total GI Vol'] <= 248500]
+
 
         bin_gi_issues = df[df['GI Class'] == 'Bin']['IssueNo'].unique()
         layer_gi_issues = df[df['GI Class'] == 'Layer']['IssueNo'].unique()
@@ -230,3 +231,4 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
