@@ -12,7 +12,7 @@ def load_data(file_path):
     df_raw = pd.read_excel(file_path, sheet_name="GIanalysis")
 
     # Find header row (row 3 has column names)
-    df = df_raw.iloc[4:].copy()
+    df = df_raw.iloc[5:].copy()
     df.columns = [
         "Account", "GINo", "CustRef", "Type", "Priority", "PONumber",
         "ShippedOn", "CreatedOn", "ExpectedDate", "ShipToCode",
@@ -122,3 +122,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
