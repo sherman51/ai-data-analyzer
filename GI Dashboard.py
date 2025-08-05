@@ -104,6 +104,7 @@ if uploaded_file:
         st.warning("ExpectedDate column not found. Forecast chart not available.")
 
 else:
-    st.info("⬅ Please upload a Good Receive Excel file to begin.")
+    st.info("⬅ Please upload a Good Issue Excel file to begin.")
+
 
 
