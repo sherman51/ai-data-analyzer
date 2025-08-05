@@ -1,5 +1,3 @@
-# Modified section of your Streamlit app - Full code with corrected multi-line JobNo logic
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -117,93 +115,6 @@ if picking_pool_file and sku_master_file:
         df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
         df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
 
-        # --- Group by IssueNo to get Total GI Vol and Line Count ---
-        gi_summary = (
-            df.groupby('IssueNo')
-            .agg(
-                Total_GI_Vol=('Total Item Vol', 'sum'),
-                Line_Count=('SKU', 'count'),
-                ShipToName=('ShipToName', 'first')
-            )
-            .reset_index()
-        )
-        
-        # --- Split into single-line and multi-line GIs ---
-        single_line_gis = gi_summary[gi_summary['Line_Count'] == 1].copy()
-        multi_line_gis = gi_summary[gi_summary['Line_Count'] > 1].copy()
-        
-        # --- Assign JobNos to Single-line GIs ---
-        job_counter = 1
-        single_line_assignments = []
-        
-        for name, group in single_line_gis.groupby('ShipToName'):
-            group = group.sort_values('IssueNo')
-            group['GI_Group_Index'] = group.groupby('IssueNo').ngroup()
-            group['JobNo'] = group['GI_Group_Index'].apply(lambda x: f"Job{str(job_counter + x // 5).zfill(3)}")
-            job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
-            single_line_assignments.append(group)
-        
-        # Combine all single-line jobs
-        single_line_final_jobs = pd.concat(single_line_assignments) if single_line_assignments else pd.DataFrame(columns=['IssueNo', 'JobNo'])
-        
-        # -------------------------------
-        # Step 1: Work only on unique multi-line GIs
-        # -------------------------------
-        
-        multi_line_gis_unique = multi_line_gis[['IssueNo', 'Total_GI_Vol']].drop_duplicates()
-        
-        # Sort largest GIs first
-        multi_line_gis_unique = multi_line_gis_unique.sort_values(by="Total_GI_Vol", ascending=False)
-        
-        multi_line_jobs = []  # each job is a list of tuples (IssueNo, Vol)
-        job_limits = []       # running total volume for each JobNo
-        max_vol = 600000
-        
-        # -------------------------------
-        # Step 2: Greedy bin-packing with volume cap
-        # -------------------------------
-        for _, row in multi_line_gis_unique.iterrows():
-            issue_no = row['IssueNo']
-            volume = row['Total_GI_Vol']
-            placed = False
-        
-            for i, used_vol in enumerate(job_limits):
-                if used_vol + volume <= max_vol:
-                    multi_line_jobs[i].append((issue_no, volume))
-                    job_limits[i] += volume
-                    placed = True
-                    break
-        
-            if not placed:
-                multi_line_jobs.append([(issue_no, volume)])
-                job_limits.append(volume)
-        
-        # -------------------------------
-        # Step 3: Assign JobNos
-        # -------------------------------
-        
-        job_counter = 1  # you can change this starting number
-        issue_job_map = {}
-        
-        for i, job in enumerate(multi_line_jobs, start=job_counter):
-            job_no = f"Job{str(i).zfill(3)}"
-            for issue_no, _ in job:
-                issue_job_map[issue_no] = job_no
-        
-        # -------------------------------
-        # Step 4: Apply JobNos back to full df (SKU-level)
-        # -------------------------------
-        
-        df['JobNo'] = df['IssueNo'].map(issue_job_map)
-
-        
-        # --- Merge assigned JobNos back to the grouped gi_summary ---
-        jobno_summary = pd.concat([single_line_final_jobs[['IssueNo', 'JobNo']], multi_line_final_jobs], ignore_index=True)
-        
-        # --- Map JobNos back to full dataframe ---
-        df['JobNo'] = df['IssueNo'].map(jobno_summary.set_index('IssueNo')['JobNo'])
-
-
         
         # --- Final filtering by GI type ---
         if gi_type == "Single-line":
@@ -279,6 +190,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
