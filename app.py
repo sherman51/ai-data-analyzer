@@ -170,21 +170,47 @@ if picking_pool_file and sku_master_file:
             single_jobs.append(group)
         single_line_final = pd.concat(single_jobs)
 
-        # Job Assignment - Multi-line
-        multi_summary = multi_line[['IssueNo', 'Total GI Vol']].drop_duplicates().sort_values('Total GI Vol')
-        multi_line['JobNo'] = None
-        current_job, current_vol, job_id = [], 0, job_counter
-
+        # First-Fit Decreasing Job Assignment for Multi-line GIs
+        multi_summary = (
+            multi_line.groupby("IssueNo", as_index=False)["Total GI Vol"].sum()
+            .sort_values(by="Total GI Vol", ascending=False)
+        )
+        
+        # FFD algorithm: Allocate to jobs
+        jobs = []  # list of job bins: each job is a list of (IssueNo, volume)
+        job_limits = []  # current volume used in each job
+        max_vol = 600000
+        
         for _, row in multi_summary.iterrows():
-            if current_vol + row['Total GI Vol'] > 600000:
-                for gi in current_job:
-                    multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
-                job_id += 1
-                current_job, current_vol = [], 0
-            current_job.append(row['IssueNo'])
-            current_vol += row['Total GI Vol']
-        for gi in current_job:
-            multi_line.loc[multi_line['IssueNo'] == gi, 'JobNo'] = f"Job{str(job_id).zfill(3)}"
+            issue_no = row["IssueNo"]
+            volume = row["Total GI Vol"]
+            placed = False
+        
+            for i, used_vol in enumerate(job_limits):
+                if used_vol + volume <= max_vol:
+                    jobs[i].append((issue_no, volume))
+                    job_limits[i] += volume
+                    placed = True
+                    break
+        
+            if not placed:
+                # create new job
+                jobs.append([(issue_no, volume)])
+                job_limits.append(volume)
+        
+        # Map IssueNo to JobNo
+        job_assignments = {}
+        for i, job in enumerate(jobs, start=job_counter):  # start from existing job_counter
+            job_no = f"Job{str(i).zfill(3)}"
+            for issue_no, _ in job:
+                job_assignments[issue_no] = job_no
+        
+        # Apply job numbers to multi_line
+        multi_line['JobNo'] = multi_line['IssueNo'].map(job_assignments)
+        
+        # Update job_counter for next use (optional, if more jobs come after)
+        job_counter += len(jobs)
+
 
         # Combine all
         final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
@@ -282,6 +308,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
