@@ -42,69 +42,23 @@ if uploaded_file:
     st.dataframe(df.head(50), use_container_width=True)
 
     # ------------------------ SUMMARY METRICS ------------------------
-    st.subheader("📈 Summary Metrics")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total GRNs", df["GRNO"].nunique() if "GRNO" in df.columns else "N/A")
-    with col2:
-        st.metric("Unique Suppliers", df["Supplier"].nunique() if "Supplier" in df.columns else "N/A")
-    with col3:
-        st.metric("Total Rows", len(df))
+
+    
 
     # ------------------------ VISUALIZATION 1: MONTHLY GR SUMMARY ------------------------
-    st.subheader("📊 Monthly GR Summary (Grouped by GRDate)")
 
-    if "GRDate" in df.columns:
-        df_monthly = df.dropna(subset=["GRDate"]).copy()
-        df_monthly["GR_Month"] = df_monthly["GRDate"].dt.to_period("M").astype(str)
-        month_summary = df_monthly.groupby("GR_Month").size().reset_index(name="Total GRs")
-
-        fig1 = px.bar(
-            month_summary,
-            x="GR_Month",
-            y="Total GRs",
-            text="Total GRs",
-            title="Monthly GR Summary",
-            labels={"GR_Month": "Month", "Total GRs": "Goods Received"},
-        )
-        fig1.update_traces(textposition="outside")
-        fig1.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig1, use_container_width=True)
-
-    else:
-        st.info("GRDate column not found, can't plot monthly summary.")
 
     # ------------------------ VISUALIZATION 2: BAR CHART (Today vs Forecast) ------------------------
-    st.subheader("📦 Today's Progress & Upcoming Forecast")
 
-    if "ExpectedDate" in df.columns:
-        today = pd.to_datetime(datetime.now().date())
-        tomorrow = today + timedelta(days=1)
-        next_7 = today + timedelta(days=7)
 
-        df_expected = df.dropna(subset=["ExpectedDate"])
 
-        today_count = df_expected[df_expected["ExpectedDate"].dt.date == today.date()].shape[0]
-        tomorrow_count = df_expected[df_expected["ExpectedDate"].dt.date == tomorrow.date()].shape[0]
-        next_7_count = df_expected[
-            (df_expected["ExpectedDate"].dt.date > tomorrow.date()) &
-            (df_expected["ExpectedDate"].dt.date <= next_7.date())
-        ].shape[0]
-
-        forecast_df = pd.DataFrame({
-            "Period": ["Today", "Tomorrow", "Next 7 Days"],
-            "Expected GRs": [today_count, tomorrow_count, next_7_count]
-        })
-
-        fig2 = px.bar(forecast_df, x="Period", y="Expected GRs", text="Expected GRs",
-                      title="GR Forecast", color="Period")
-        st.plotly_chart(fig2, use_container_width=True)
 
     else:
         st.warning("ExpectedDate column not found. Forecast chart not available.")
 
 else:
     st.info("⬅ Please upload a Good Issue Excel file to begin.")
+
 
 
 
