@@ -85,10 +85,10 @@ if picking_pool_file and sku_master_file:
         picking_pool['LocationType'] = picking_pool['LocationType'].astype(str).str.strip().str.lower()
         
         # 🆕 Step 2: Identify GRNOs that contain at least one line with LocationType == 'storage'
-        grnos_with_storage = picking_pool[picking_pool['LocationType'] == 'storage']['GRNO'].unique()
+        grnos_with_storage = picking_pool[picking_pool['LocationType'] == 'storage']['IssueNo'].unique()
         
         # 🆕 Step 3: Exclude those GRNOs
-        picking_pool = picking_pool[~picking_pool['GRNO'].isin(grnos_with_storage)]
+        picking_pool = picking_pool[~picking_pool['IssueNo'].isin(grnos_with_storage)]
         
         # ✅ Step 4: Apply remaining filter: Zone = 'A', Location starts with A- or SOFT-
         picking_pool = picking_pool[
@@ -282,6 +282,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
