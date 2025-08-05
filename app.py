@@ -117,37 +117,44 @@ if picking_pool_file and sku_master_file:
         df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
         df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
 
-        single_line = df[df['Line Count'] == 1].copy()
-        multi_line = df[df['Line Count'] > 1].copy()
-
+        # --- Group by IssueNo before job assignment ---
+        gi_summary = (
+            df.groupby('IssueNo')
+            .agg({
+                'Total Item Vol': 'sum',
+                'Line Count': 'first',
+                'ShipToName': 'first'
+            })
+            .reset_index()
+        )
+        
+        # --- Split into single-line and multi-line ---
+        single_line_gis = gi_summary[gi_summary['Line Count'] == 1].copy()
+        multi_line_gis = gi_summary[gi_summary['Line Count'] > 1].copy()
+        
         # --- Assign Jobs to Single Line GIs ---
         job_counter = 1
-        single_jobs = []
-        for name, group in single_line.groupby('ShipToName'):
+        single_line_assignments = []
+        
+        for name, group in single_line_gis.groupby('ShipToName'):
             group = group.sort_values('IssueNo')
             group['GI_Group_Index'] = group.groupby('IssueNo').ngroup()
             group['JobNo'] = group['GI_Group_Index'].apply(lambda x: f"Job{str(job_counter + x // 5).zfill(3)}")
             job_counter += (group['GI_Group_Index'].nunique() + 4) // 5
-            single_jobs.append(group)
-        single_line_final = pd.concat(single_jobs)
-
+            single_line_assignments.append(group)
+        
+        single_line_final_jobs = pd.concat(single_line_assignments)
+        
         # --- Assign Jobs to Multi-line GIs ---
-        issue_vols = multi_line.groupby('IssueNo')['Total GI Vol'].first().to_dict()
-        # ✅ Corrected version: only one row per IssueNo
-        multi_summary = (
-            multi_line
-            .drop_duplicates(subset='IssueNo')  # Ensures only one entry per GI
-            [['IssueNo', 'Total GI Vol']]
-            .sort_values(by="Total GI Vol", ascending=False)
-        )
-
+        multi_summary = multi_line_gis.sort_values(by="Total Item Vol", ascending=False)
+        
         jobs = []
         job_limits = []
         max_vol = 600000
-
+        
         for _, row in multi_summary.iterrows():
             issue_no = row['IssueNo']
-            volume = row['Total GI Vol']
+            volume = row['Total Item Vol']
             placed = False
             for i, used_vol in enumerate(job_limits):
                 if used_vol + volume <= max_vol:
@@ -158,7 +165,7 @@ if picking_pool_file and sku_master_file:
             if not placed:
                 jobs.append([(issue_no, volume)])
                 job_limits.append(volume)
-
+        
         job_assignments = {}
         for i, job in enumerate(jobs, start=job_counter):
             job_no = f"Job{str(i).zfill(3)}"
@@ -167,11 +174,27 @@ if picking_pool_file and sku_master_file:
                 st.warning(f"⚠️ {job_no} exceeds 600000 vol: {total_vol}")
             for issue_no, _ in job:
                 job_assignments[issue_no] = job_no
+        
+        # --- Combine and map JobNos back to df ---
+        jobno_map = {
+            **dict(zip(single_line_final_jobs['IssueNo'], single_line_final_jobs['JobNo'])),
+            **job_assignments
+        }
+        df['JobNo'] = df['IssueNo'].map(jobno_map)
+        
+        # --- Final filtering by GI type ---
+        if gi_type == "Single-line":
+            df = df[df['Line Count'] == 1]
+        elif gi_type == "Multi-line":
+            df = df[df['Line Count'] > 1]
+        
+        # --- Continue with carton and output logic ---
+        df = pd.concat([df, df.apply(calculate_carton_info, axis=1)], axis=1)
+        df['Batch No'] = df.get('StorageLocation')
+        df['Commercial Box Count'] = df['PickingQty'] / df['Qty Commercial Box']
+        
+        final_df = df.copy()
 
-        multi_line['JobNo'] = multi_line['IssueNo'].map(job_assignments)
-
-        # Combine final
-        final_df = pd.concat([single_line_final, multi_line], ignore_index=True)
 
         if gi_type == "Single-line":
             final_df = final_df[final_df['Line Count'] == 1]
@@ -236,5 +259,6 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
