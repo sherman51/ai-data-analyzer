@@ -172,9 +172,11 @@ if picking_pool_file and sku_master_file:
 
         # First-Fit Decreasing Job Assignment for Multi-line GIs
         multi_summary = (
-            multi_line.groupby("IssueNo", as_index=False)["Total GI Vol"].sum()
+            multi_line[['IssueNo', 'Total GI Vol']]
+            .drop_duplicates()
             .sort_values(by="Total GI Vol", ascending=False)
         )
+    
         
         # FFD algorithm: Allocate to jobs
         jobs = []  # list of job bins: each job is a list of (IssueNo, volume)
@@ -308,6 +310,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
