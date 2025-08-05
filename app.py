@@ -117,20 +117,20 @@ if picking_pool_file and sku_master_file:
         df['LayerNo'] = df['IssueNo'].map(layer_no_mapping)
         df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
 
-        # --- Group by IssueNo before job assignment ---
+        # --- Group by IssueNo to get Total GI Vol ---
         gi_summary = (
             df.groupby('IssueNo')
-            .agg({
-                'Total Item Vol': 'sum',
-                'Line Count': 'first',
-                'ShipToName': 'first'
-            })
+            .agg(
+                Total_GI_Vol=('Total Item Vol', 'sum'),
+                Line_Count=('SKU', 'count'),
+                ShipToName=('ShipToName', 'first')
+            )
             .reset_index()
         )
         
-        # --- Split into single-line and multi-line ---
-        single_line_gis = gi_summary[gi_summary['Line Count'] == 1].copy()
-        multi_line_gis = gi_summary[gi_summary['Line Count'] > 1].copy()
+        # --- Split into single-line and multi-line GIs ---
+        single_line_gis = gi_summary[gi_summary['Line_Count'] == 1].copy()
+        multi_line_gis = gi_summary[gi_summary['Line_Count'] > 1].copy()
         
         # --- Assign Jobs to Single Line GIs ---
         job_counter = 1
@@ -146,7 +146,7 @@ if picking_pool_file and sku_master_file:
         single_line_final_jobs = pd.concat(single_line_assignments)
         
         # --- Assign Jobs to Multi-line GIs ---
-        multi_summary = multi_line_gis.sort_values(by="Total Item Vol", ascending=False)
+        multi_summary = multi_line_gis.sort_values(by="Total_GI_Vol", ascending=False)
         
         jobs = []
         job_limits = []
@@ -154,7 +154,7 @@ if picking_pool_file and sku_master_file:
         
         for _, row in multi_summary.iterrows():
             issue_no = row['IssueNo']
-            volume = row['Total Item Vol']
+            volume = row['Total_GI_Vol']
             placed = False
             for i, used_vol in enumerate(job_limits):
                 if used_vol + volume <= max_vol:
@@ -175,12 +175,13 @@ if picking_pool_file and sku_master_file:
             for issue_no, _ in job:
                 job_assignments[issue_no] = job_no
         
-        # --- Combine and map JobNos back to df ---
+        # --- Combine all JobNo mappings back to df ---
         jobno_map = {
             **dict(zip(single_line_final_jobs['IssueNo'], single_line_final_jobs['JobNo'])),
             **job_assignments
         }
         df['JobNo'] = df['IssueNo'].map(jobno_map)
+
         
         # --- Final filtering by GI type ---
         if gi_type == "Single-line":
@@ -256,6 +257,7 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
