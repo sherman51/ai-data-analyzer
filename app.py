@@ -133,8 +133,13 @@ if picking_pool_file and sku_master_file:
 
         # --- Assign Jobs to Multi-line GIs ---
         issue_vols = multi_line.groupby('IssueNo')['Total GI Vol'].first().to_dict()
-        multi_summary = pd.DataFrame(issue_vols.items(), columns=['IssueNo', 'Total GI Vol'])
-        multi_summary = multi_summary.sort_values(by='Total GI Vol', ascending=False)
+        # ✅ Corrected version: only one row per IssueNo
+        multi_summary = (
+            multi_line
+            .drop_duplicates(subset='IssueNo')  # Ensures only one entry per GI
+            [['IssueNo', 'Total GI Vol']]
+            .sort_values(by="Total GI Vol", ascending=False)
+        )
 
         jobs = []
         job_limits = []
@@ -231,4 +236,5 @@ if picking_pool_file and sku_master_file:
 
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
