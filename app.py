@@ -63,7 +63,7 @@ def load_data(picking_pool_file, sku_master_file):
 
     picking_pool['DeliveryDate'] = pd.to_datetime(picking_pool['DeliveryDate'], errors='coerce')
     picking_pool = picking_pool[picking_pool['DeliveryDate'].notna()]
-    picking_pool['DeliveryDateStr'] = picking_pool['DeliveryDate'].dt.strftime("%Y-%m-%d")
+    picking_pool['DeliveryDate'] = picking_pool['DeliveryDate'].dt.strftime("%Y-%m-%d")
 
     return picking_pool, sku_master
 
@@ -323,6 +323,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
