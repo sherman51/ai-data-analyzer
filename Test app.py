@@ -29,7 +29,7 @@ if uploaded_files:
 
         # Create merged Excel in memory
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        with pd.ExcelWriter(output) as writer:
             for sheet_name, df_list in merged_sheets.items():
                 merged_df = pd.concat(df_list, ignore_index=True)
                 merged_df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -42,3 +42,4 @@ if uploaded_files:
             file_name="merged_sheets.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
