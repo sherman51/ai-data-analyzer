@@ -1,49 +1,45 @@
 import streamlit as st
 import pandas as pd
 import io
-import os
-from pathlib import Path
 
-st.title("📂 Merge Excel Files from Folder (By Sheet Name)")
+st.title("🧾 Merge Excel Files by Sheet Name")
 
-folder_path = st.text_input("Enter folder path containing Excel files:")
+st.write("Upload multiple Excel files. Sheets with the same name will be merged into one.")
 
-if folder_path:
-    folder = Path(folder_path)
+# Upload multiple Excel files
+uploaded_files = st.file_uploader(
+    "Upload Excel files", type=["xlsx"], accept_multiple_files=True
+)
 
-    if not folder.exists() or not folder.is_dir():
-        st.error("❌ Invalid folder path.")
-    else:
-        excel_files = list(folder.glob("*.xlsx"))
+if uploaded_files:
+    merged_sheets = {}
 
-        if not excel_files:
-            st.warning("⚠️ No Excel files found in the folder.")
-        else:
-            st.write(f"🔍 Found {len(excel_files)} Excel files. Processing...")
+    for uploaded_file in uploaded_files:
+        # Read all sheets from current file
+        try:
+            xls = pd.read_excel(uploaded_file, sheet_name=None)
+        except Exception as e:
+            st.error(f"Failed to read {uploaded_file.name}: {e}")
+            continue
 
-            # Dictionary to hold all sheet data
-            merged_sheets = {}
+        for sheet_name, df in xls.items():
+            if sheet_name in merged_sheets:
+                merged_sheets[sheet_name].append(df)
+            else:
+                merged_sheets[sheet_name] = [df]
 
-            for file in excel_files:
-                xls = pd.read_excel(file, sheet_name=None)
-                for sheet_name, df in xls.items():
-                    if sheet_name in merged_sheets:
-                        merged_sheets[sheet_name].append(df)
-                    else:
-                        merged_sheets[sheet_name] = [df]
+    # Merge and write to output Excel
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        for sheet_name, df_list in merged_sheets.items():
+            merged_df = pd.concat(df_list, ignore_index=True)
+            merged_df.to_excel(writer, sheet_name=sheet_name, index=False)
+        writer.save()
 
-            # Merge and write to in-memory file
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                for sheet_name, df_list in merged_sheets.items():
-                    combined_df = pd.concat(df_list, ignore_index=True)
-                    combined_df.to_excel(writer, sheet_name=sheet_name, index=False)
-                writer.save()
-
-            st.success("✅ Merging complete!")
-            st.download_button(
-                label="📥 Download Merged Excel File",
-                data=output.getvalue(),
-                file_name="merged_sheets.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+    st.success("✅ Files merged successfully!")
+    st.download_button(
+        label="📥 Download Merged Excel File",
+        data=output.getvalue(),
+        file_name="merged_sheets.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
