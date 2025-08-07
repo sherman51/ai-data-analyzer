@@ -5,3 +5,4 @@ seaborn
 openai==0.28
 openpyxl
 plotly
+xlsxwriter
