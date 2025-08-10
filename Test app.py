@@ -1,45 +1,62 @@
-import streamlit as st
-import pandas as pd
-import io
+Create a Python Streamlit app that replicates the "Outbound Dashboard" layout from the attached image. Use a sample dataset to generate the visuals.
+The dashboard should include:
 
-st.title("🧾 Merge Excel Files by Sheet Name")
+1. Header Section:
 
-uploaded_files = st.file_uploader(
-    "Upload Excel files", type=["xlsx"], accept_multiple_files=True
-)
+Logo placeholder (top left) and "Outbound Dashboard" title.
 
-if uploaded_files:
-    st.success(f"{len(uploaded_files)} file(s) uploaded. Click the button below to merge.")
-    
-    if st.button("🔀 Merge Files"):
-        merged_sheets = {}
+Display "Past 2 weeks orders" and "Avg. Daily Orders" as KPI cards.
 
-        for uploaded_file in uploaded_files:
-            try:
-                xls = pd.read_excel(uploaded_file, sheet_name=None)
-            except Exception as e:
-                st.error(f"Failed to read {uploaded_file.name}: {e}")
-                continue
+Display the current date (green) and "Daily Outbound Orders" count.
 
-            for sheet_name, df in xls.items():
-                if sheet_name in merged_sheets:
-                    merged_sheets[sheet_name].append(df)
-                else:
-                    merged_sheets[sheet_name] = [df]
+2. Orders Trend Chart:
 
-        # Create merged Excel in memory
-        output = io.BytesIO()
-        with pd.ExcelWriter(output) as writer:
-            for sheet_name, df_list in merged_sheets.items():
-                merged_df = pd.concat(df_list, ignore_index=True)
-                merged_df.to_excel(writer, sheet_name=sheet_name, index=False)
-            writer.save()
+A bar chart for the last 2 weeks showing "Orders Received" (green) and "Orders Cancelled" (orange).
 
-        st.success("✅ Files merged successfully!")
-        st.download_button(
-            label="📥 Download Merged Excel File",
-            data=output.getvalue(),
-            file_name="merged_sheets.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+X-axis: dates; Y-axis: order counts.
 
+3. Month to Date Section:
+
+Two circular gauge charts:
+
+"Back Order" with percentage and a numeric count.
+
+"Order Accuracy" with percentage and a numeric count.
+
+Values are from the sample dataset.
+
+4. Orders Breakdown Section:
+
+A horizontal stacked bar chart for:
+
+Back Orders (Accumulated)
+
+Scheduled Orders
+
+Ad-hoc Normal Orders
+
+Ad-hoc Urgent Orders
+
+Ad-hoc Critical Orders
+
+Each segment should be color-coded (green, blue, yellow, orange, etc.) and labeled with counts.
+
+5. Summary Table:
+
+Columns: Ad-hoc Critical Orders, Ad-hoc Urgent Orders, Ad-hoc Normal Orders, Scheduled Orders, Back Orders (Accumulated).
+
+Rows: Tpt Booked, Packed/Partial Packed, Picked/Partial Picked, Open.
+
+Fill with sample data.
+
+6. Design Guidelines:
+
+Match the color theme (dark blue background, green for completed, yellow for picked, light blue for packed, peach for open).
+
+Use Streamlit components for layout (columns, markdown, and charts).
+
+Use Plotly for charts (bar, stacked bar, and gauge).
+
+Include sample dataset creation inside the script so it runs standalone.
+
+Output the complete streamlit_app.py code.
