@@ -1,92 +1,89 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
 
-# ------------------------ PAGE CONFIG ------------------------
-st.set_page_config(layout="wide", page_title="Operations Dashboard")
+# ===================== PAGE CONFIG =====================
+st.set_page_config(
+    page_title="📊 GI Analysis Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Dark theme
+# ===================== STYLING =====================
 st.markdown("""
     <style>
-        body { background-color: #0E1117; color: white; }
-        .stMetric { background-color: #1E1E1E; padding: 15px; border-radius: 10px; }
+        /* Background */
+        .stApp {
+            background-color: #f9f9f9;
+        }
+
+        /* Cards */
+        .metric-card {
+            padding: 20px;
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        /* Titles */
+        h1, h2, h3 {
+            font-family: 'Segoe UI', sans-serif;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# ------------------------ KPI ROW ------------------------
-st.title("📊 Operations Dashboard")
+# ===================== SIDEBAR =====================
+st.sidebar.header("⚙️ Dashboard Settings")
+uploaded_file = st.sidebar.file_uploader("Upload GI Analysis Excel", type=["xls", "xlsx"])
+view_option = st.sidebar.selectbox("Select View", ["Summary", "Detailed Analysis"])
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Past 2 Weeks Orders", "12,450", "+5%")
-col2.metric("Avg. Daily Orders", "890", "+2%")
-col3.metric("Date", "10 Aug 2025")
-col4.metric("Daily Outbound Orders", "950", "-3%")
-
-# ------------------------ CHARTS ROW ------------------------
-left_col, right_col = st.columns([2, 2])
-
-# Left bar chart
-bar_data = pd.DataFrame({
-    "Date": pd.date_range("2025-07-28", periods=10),
-    "Orders": [800, 850, 780, 900, 950, 1000, 870, 920, 980, 940]
+# ===================== MOCK DATA =====================
+# For now we just use mock data (replace later with Excel parsing)
+df = pd.DataFrame({
+    "GI_No": [101, 102, 103, 104, 105],
+    "Volume": [230000, 180000, 310000, 275000, 199000],
+    "Category": ["Nito", "Oxy", "Nito", "Oxy", "Nito"]
 })
-fig_bar = px.bar(bar_data, x="Date", y="Orders", title="Orders Received (Last 2 Weeks)", color_discrete_sequence=["#00CC96"])
-fig_bar.update_layout(plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", font_color="white")
-left_col.plotly_chart(fig_bar, use_container_width=True)
 
-# Right stacked horizontal bar
-stack_data = pd.DataFrame({
-    "Category": ["Back Orders", "Scheduled", "Ad-hoc Normal", "Ad-hoc Urgent", "Ad-hoc Critical"],
-    "Volume": [120, 400, 150, 80, 50]
-})
-fig_stack = px.bar(stack_data, x="Volume", y="Category", orientation="h", title="Order Breakdown", color="Category",
-                   color_discrete_map={
-                       "Back Orders": "#EF553B",
-                       "Scheduled": "#636EFA",
-                       "Ad-hoc Normal": "#00CC96",
-                       "Ad-hoc Urgent": "#FFA15A",
-                       "Ad-hoc Critical": "#AB63FA"
-                   })
-fig_stack.update_layout(plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", font_color="white", showlegend=False)
-right_col.plotly_chart(fig_stack, use_container_width=True)
+# ===================== SUMMARY METRICS =====================
+st.title("📊 GI Analysis Dashboard")
 
-# ------------------------ GAUGES ROW ------------------------
-g1, g2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Total GIs", len(df))
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Gauge 1 - Order Accuracy
-fig_g1 = go.Figure(go.Indicator(
-    mode="gauge+number",
-    value=96,
-    title={'text': "Order Accuracy (%)"},
-    gauge={'axis': {'range': [0, 100]},
-           'bar': {'color': "#00CC96"},
-           'bgcolor': "white",
-           'steps': [{'range': [0, 80], 'color': "#FF4B4B"},
-                     {'range': [80, 95], 'color': "#FFA15A"},
-                     {'range': [95, 100], 'color': "#00CC96"}]}
-))
-fig_g1.update_layout(plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", font_color="white")
-g1.plotly_chart(fig_g1, use_container_width=True)
+with col2:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Total Volume", f"{df['Volume'].sum():,}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Gauge 2 - Back Order %
-fig_g2 = go.Figure(go.Indicator(
-    mode="gauge+number",
-    value=4,
-    title={'text': "Back Order (%)"},
-    gauge={'axis': {'range': [0, 20]},
-           'bar': {'color': "#EF553B"},
-           'steps': [{'range': [0, 5], 'color': "#00CC96"},
-                     {'range': [5, 10], 'color': "#FFA15A"},
-                     {'range': [10, 20], 'color': "#FF4B4B"}]}
-))
-fig_g2.update_layout(plot_bgcolor="#0E1117", paper_bgcolor="#0E1117", font_color="white")
-g2.plotly_chart(fig_g2, use_container_width=True)
+with col3:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Average Volume", f"{df['Volume'].mean():,.0f}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# ------------------------ TABLE ROW ------------------------
-status_data = pd.DataFrame({
-    "Status": ["Tpt Booked", "Packed", "Picked", "Open"],
-    "Orders": [320, 450, 210, 80]
-})
-st.subheader("Order Status Breakdown")
-st.dataframe(status_data, use_container_width=True)
+# ===================== CHARTS =====================
+col_chart1, col_chart2 = st.columns(2)
+
+with col_chart1:
+    fig1 = px.bar(
+        df, x="GI_No", y="Volume", color="Category",
+        title="GI Volume by No.",
+        color_discrete_sequence=px.colors.qualitative.Pastel
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+with col_chart2:
+    fig2 = px.pie(
+        df, names="Category", values="Volume",
+        title="Volume Share by Category",
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+# ===================== TABLE =====================
+st.subheader("📋 Detailed Data")
+st.dataframe(df, use_container_width=True)
