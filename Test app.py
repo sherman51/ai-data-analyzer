@@ -47,34 +47,36 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
 
-# ---------- DATE FILTER SELECTION ----------
-today = datetime.today()
-date_options = [
-    "Today", 
-    "Today +1", 
-    "Today +2", 
-    "Today +3"
-]
-selected_date_option = st.selectbox("Select Date Range", date_options)
-
-# Calculate the selected date offset
-if selected_date_option == "Today":
-    selected_date = today
-elif selected_date_option == "Today +1":
-    selected_date = today + timedelta(days=1)
-elif selected_date_option == "Today +2":
-    selected_date = today + timedelta(days=2)
-elif selected_date_option == "Today +3":
-    selected_date = today + timedelta(days=3)
-
-# Filter data based on the selected date
-filtered_data = df_orders[df_orders['Date'] == selected_date.date()]
-
 # ---------- TOP ROW: Order Breakdown & Summary ----------
 col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
 
 with col_breakdown:
+    # ---------- DATE FILTER SELECTION ----------
+    today = datetime.today()
+    date_options = [
+        "Today", 
+        "Today +1", 
+        "Today +2", 
+        "Today +3"
+    ]
+    selected_date_option = st.selectbox("Select Date Range", date_options)
+
+    # Calculate the selected date offset
+    if selected_date_option == "Today":
+        selected_date = today
+    elif selected_date_option == "Today +1":
+        selected_date = today + timedelta(days=1)
+    elif selected_date_option == "Today +2":
+        selected_date = today + timedelta(days=2)
+    elif selected_date_option == "Today +3":
+        selected_date = today + timedelta(days=3)
+
+    # Filter data based on the selected date
+    filtered_data = df_orders[df_orders['Date'] == selected_date.date()]
+
     st.metric("Total Orders in Breakdown", int(filtered_data["Orders Received"].sum()))
+    
+    # Order breakdown chart
     fig_breakdown = px.bar(
         order_breakdown,
         x="Orders",
