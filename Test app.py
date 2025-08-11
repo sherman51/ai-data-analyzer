@@ -1,161 +1,164 @@
-# streamlit_app.py
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
+from datetime import datetime, timedelta
 
-# ----- Color Theme -----
-COLORS = {
-    "background": "#3B4453",           # Soft warm grey-blue background
-    "text": "#E8E9EB",                 # Off-white text
-    "tpt_booked": "#7FA6A1",           # Muted teal
-    "packed": "#A0B9C6",               # Muted sky blue
-    "picked": "#D4B483",               # Muted amber
-    "open": "#D89A94",                 # Muted coral
-    "orders_received": "#7FA6A1",      # Muted teal
-    "orders_cancelled": "#D89A94"      # Muted coral
+# =========================
+# PAGE CONFIG
+# =========================
+st.set_page_config(
+    page_title="Outbound Dashboard",
+    layout="wide"
+)
+
+# =========================
+# SAMPLE DATA
+# =========================
+np.random.seed(42)
+dates = pd.date_range(datetime.today() - timedelta(days=13), periods=14)
+
+orders_received = np.random.randint(80, 150, size=14)
+orders_cancelled = np.random.randint(0, 20, size=14)
+
+# Month to date metrics
+back_order_pct = 12
+back_order_count = 45
+order_accuracy_pct = 96
+order_accuracy_count = 560
+
+# Orders breakdown
+breakdown_data = pd.DataFrame({
+    "Category": ["Tpt Booked", "Packed/Partial Packed", "Picked/Partial Picked", "Open"],
+    "Back Orders": np.random.randint(5, 20, size=4),
+    "Scheduled Orders": np.random.randint(10, 30, size=4),
+    "Ad-hoc Normal Orders": np.random.randint(15, 40, size=4),
+    "Ad-hoc Urgent Orders": np.random.randint(5, 15, size=4),
+    "Ad-hoc Critical Orders": np.random.randint(2, 10, size=4)
+})
+
+# =========================
+# COLOR PALETTE (SOFT & MUTED)
+# =========================
+colors = {
+    "orders_received": "#66bb6a",
+    "orders_cancelled": "#ef5350",
+    "back_orders": "#9575cd",
+    "scheduled_orders": "#42a5f5",
+    "normal_orders": "#ffca28",
+    "urgent_orders": "#ff8a65",
+    "critical_orders": "#f06292"
 }
 
-# ----- Page Config -----
-st.set_page_config(page_title="Outbound Dashboard", layout="wide")
+# =========================
+# HEADER
+# =========================
 st.markdown(
-    f"""
-    <style>
-        .stApp {{
-            background-color: {COLORS['background']};
-        }}
-        .main {{
-            background-color: {COLORS['background']};
-        }}
-        .block-container {{
-            padding-top: 1rem;
-            padding-bottom: 0rem;
-            color: {COLORS['text']};
-        }}
-        h1, h2, h3, h4, h5, h6, p, div {{
-            color: {COLORS['text']} !important;
-        }}
-    </style>
-    """,
+    "<h1 style='color:#333333; font-weight:700;'>📦 Outbound Dashboard</h1>",
     unsafe_allow_html=True
 )
 
-# ----- Sample Data -----
-dates = pd.date_range(start="2023-07-03", periods=14, freq="D")
-orders_received = [40, 48, 30, 20, 42, 35, 45, 55, 60, 55, 58, 62, 70, 65]
-orders_cancelled = [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
-# KPI values
-past_2_weeks_orders = sum(orders_received)
-avg_daily_orders = past_2_weeks_orders / len(dates)
-daily_orders = 84
-current_date = "17 Jul 2023"
-
-# ----- Header & KPIs -----
-col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+# KPIs
+col1, col2, col3 = st.columns(3)
 with col1:
-    st.markdown("## 🏥 SSW Healthcare - **Outbound Dashboard**")
+    st.metric("Past 2 Weeks Orders", f"{orders_received.sum():,}")
 with col2:
-    st.metric("Past 2 Weeks Orders", f"{past_2_weeks_orders}")
+    st.metric("Avg. Daily Orders", f"{orders_received.mean():.0f}")
 with col3:
-    st.metric("Avg. Daily Orders", f"{avg_daily_orders:.1f}")
-with col4:
-    st.metric("Daily Outbound Orders", f"{daily_orders}", help=current_date)
+    st.metric(f"Daily Outbound Orders ({datetime.today().strftime('%d %b %Y')})", f"{orders_received[-1]}")
 
-# ----- Orders Trend Chart -----
-df_orders = pd.DataFrame({
+# =========================
+# ORDERS TREND CHART
+# =========================
+trend_df = pd.DataFrame({
     "Date": dates,
     "Orders Received": orders_received,
     "Orders Cancelled": orders_cancelled
 })
 
-fig_orders = go.Figure()
-fig_orders.add_trace(go.Bar(
-    x=df_orders["Date"], y=df_orders["Orders Received"],
-    name="Orders Received", marker_color=COLORS["orders_received"]
+fig_trend = go.Figure()
+fig_trend.add_trace(go.Bar(
+    x=trend_df["Date"],
+    y=trend_df["Orders Received"],
+    name="Orders Received",
+    marker_color=colors["orders_received"]
 ))
-fig_orders.add_trace(go.Bar(
-    x=df_orders["Date"], y=df_orders["Orders Cancelled"],
-    name="Orders Cancelled", marker_color=COLORS["orders_cancelled"]
+fig_trend.add_trace(go.Bar(
+    x=trend_df["Date"],
+    y=trend_df["Orders Cancelled"],
+    name="Orders Cancelled",
+    marker_color=colors["orders_cancelled"]
 ))
-fig_orders.update_layout(
+fig_trend.update_layout(
     barmode="group",
-    plot_bgcolor=COLORS["background"],
-    paper_bgcolor=COLORS["background"],
-    font=dict(color=COLORS["text"]),
-    title="Orders in Past 2 Weeks"
+    title="Orders Trend (Past 2 Weeks)",
+    xaxis_title="Date",
+    yaxis_title="Orders",
+    plot_bgcolor="white",
+    paper_bgcolor="white",
+    font=dict(color="#333333")
 )
-st.plotly_chart(fig_orders, use_container_width=True)
+st.plotly_chart(fig_trend, use_container_width=True)
 
-# ----- Month to Date Gauges -----
-col1, col2 = st.columns(2)
-with col1:
-    fig_back = go.Figure(go.Indicator(
+# =========================
+# MTD GAUGES
+# =========================
+col4, col5 = st.columns(2)
+
+with col4:
+    fig_backorder = go.Figure(go.Indicator(
         mode="gauge+number",
-        value=0.10,
-        number={'valueformat': ".2%"},
-        gauge={
-            'axis': {'range': [0, 1]},
-            'bar': {'color': COLORS["tpt_booked"]},
-            'bgcolor': "white"
-        },
-        title={'text': "Back Order %", 'font': {'size': 24, 'color': COLORS["text"]}}
+        value=back_order_pct,
+        title={'text': "Back Order %", 'font': {'size': 20}},
+        number={'suffix': "%"},
+        gauge={'axis': {'range': [0, 100]},
+               'bar': {'color': colors["back_orders"]},
+               'bgcolor': "white"}
     ))
-    fig_back.update_layout(paper_bgcolor=COLORS["background"], font=dict(color=COLORS["text"]))
-    st.plotly_chart(fig_back, use_container_width=True)
+    st.plotly_chart(fig_backorder, use_container_width=True)
 
-with col2:
+with col5:
     fig_accuracy = go.Figure(go.Indicator(
         mode="gauge+number",
-        value=1.00,
-        number={'valueformat': ".2%"},
-        gauge={
-            'axis': {'range': [0, 1]},
-            'bar': {'color': COLORS["tpt_booked"]},
-            'bgcolor': "white"
-        },
-        title={'text': "Order Accuracy %", 'font': {'size': 24, 'color': COLORS["text"]}}
+        value=order_accuracy_pct,
+        title={'text': "Order Accuracy %", 'font': {'size': 20}},
+        number={'suffix': "%"},
+        gauge={'axis': {'range': [0, 100]},
+               'bar': {'color': colors["scheduled_orders"]},
+               'bgcolor': "white"}
     ))
-    fig_accuracy.update_layout(paper_bgcolor=COLORS["background"], font=dict(color=COLORS["text"]))
     st.plotly_chart(fig_accuracy, use_container_width=True)
 
-# ----- Horizontal Stacked Bar -----
-breakdown = pd.DataFrame({
-    "Category": ["Back Orders", "Scheduled Orders", "Ad-hoc Normal Orders", "Ad-hoc Urgent Orders", "Ad-hoc Critical Orders"],
-    "Tpt Booked": [2, 5, 10, 4, 3],
-    "Packed/Partial Packed": [4, 6, 7, 2, 0],
-    "Picked/Partial Picked": [3, 13, 3, 0, 3],
-    "Open": [2, 17, 0, 0, 0]
-})
+# =========================
+# ORDERS BREAKDOWN STACKED BAR
+# =========================
+breakdown_melt = breakdown_data.melt(id_vars="Category", var_name="Order Type", value_name="Count")
 
-fig_breakdown = go.Figure()
-for col, color in zip(
-    ["Tpt Booked", "Packed/Partial Packed", "Picked/Partial Picked", "Open"],
-    [COLORS["tpt_booked"], COLORS["packed"], COLORS["picked"], COLORS["open"]]
-):
-    fig_breakdown.add_trace(go.Bar(
-        y=breakdown["Category"],
-        x=breakdown[col],
-        name=col,
-        orientation='h',
-        marker_color=color,
-        text=breakdown[col],
-        textposition='inside'
-    ))
-
+fig_breakdown = px.bar(
+    breakdown_melt,
+    x="Count",
+    y="Category",
+    color="Order Type",
+    orientation="h",
+    color_discrete_map={
+        "Back Orders": colors["back_orders"],
+        "Scheduled Orders": colors["scheduled_orders"],
+        "Ad-hoc Normal Orders": colors["normal_orders"],
+        "Ad-hoc Urgent Orders": colors["urgent_orders"],
+        "Ad-hoc Critical Orders": colors["critical_orders"]
+    },
+    title="Orders Breakdown"
+)
 fig_breakdown.update_layout(
-    barmode="stack",
-    plot_bgcolor=COLORS["background"],
-    paper_bgcolor=COLORS["background"],
-    font=dict(color=COLORS["text"]),
-    title="Order Breakdown"
+    plot_bgcolor="white",
+    paper_bgcolor="white",
+    font=dict(color="#333333")
 )
 st.plotly_chart(fig_breakdown, use_container_width=True)
 
-# ----- Summary Table -----
-st.markdown("### Summary Table")
-styled_table = breakdown.style.set_properties(**{
-    'background-color': COLORS["background"],
-    'color': COLORS["text"],
-    'border-color': COLORS["text"]
-})
-st.dataframe(styled_table)
+# =========================
+# SUMMARY TABLE
+# =========================
+st.markdown("### 📊 Orders Summary Table")
+st.dataframe(breakdown_data.set_index("Category"))
