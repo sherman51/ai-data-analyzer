@@ -10,6 +10,7 @@ dates = pd.date_range(start="2025-07-01", periods=30, freq='D')
 orders_received = np.random.randint(80, 150, size=30)
 orders_cancelled = np.random.randint(5, 20, size=30)
 
+# Sample data to display before upload
 df_orders = pd.DataFrame({
     "Date": dates,
     "Orders Received": orders_received,
@@ -34,8 +35,17 @@ colors = {
     "Ad-hoc Critical": "#f06292"
 }
 
+# ---------- FILE UPLOAD ----------
+uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-# Assuming you have a column 'Date' in df_orders which stores the order date
+if uploaded_file is not None:
+    try:
+        # Read the uploaded Excel file into a DataFrame
+        df_orders = pd.read_excel(uploaded_file, sheet_name="Orders")  # Make sure sheet name is correct
+        order_breakdown = pd.read_excel(uploaded_file, sheet_name="Order Breakdown")  # Ensure this sheet exists
+        st.success("File uploaded successfully!")
+    except Exception as e:
+        st.error(f"Error reading the Excel file: {e}")
 
 # ---------- DATE FILTER SELECTION ----------
 today = datetime.today()
@@ -64,9 +74,9 @@ filtered_data = df_orders[df_orders['Date'] == selected_date.date()]
 col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
 
 with col_breakdown:
-    st.metric("Total Orders in Breakdown", int(filtered_data["Orders"].sum()))
+    st.metric("Total Orders in Breakdown", int(filtered_data["Orders Received"].sum()))
     fig_breakdown = px.bar(
-        filtered_data,
+        order_breakdown,
         x="Orders",
         y="Category",
         orientation="h",
@@ -139,5 +149,3 @@ with col_mtd:
         font=dict(color="#333333")
     )
     st.plotly_chart(fig_mtd, use_container_width=True)
-
-
