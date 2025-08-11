@@ -7,3 +7,4 @@ openpyxl
 plotly
 xlsxwriter
 dash
+dash-bootstrap-components
