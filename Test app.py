@@ -91,7 +91,7 @@ if uploaded_file is not None:
 
             st.markdown("---")
 
-            # ---------- SECOND ROW: KPIs for Entry Count ----------
+      '''      # ---------- SECOND ROW: KPIs for Entry Count ----------
             kpi1, kpi2 = st.columns(2)
             with kpi1:
                 st.metric("Total Entries", len(df_filtered))
@@ -140,10 +140,11 @@ if uploaded_file is not None:
                     paper_bgcolor="white",
                     font=dict(color="#333333")
                 )
-                st.plotly_chart(fig_mtd, use_container_width=True)
+                st.plotly_chart(fig_mtd, use_container_width=True)'''
 
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
 
 else:
     st.info("Please upload an Excel file to get started.")
+
