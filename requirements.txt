@@ -8,3 +8,4 @@ plotly
 xlsxwriter
 dash
 dash-bootstrap-components
+dash_core_components
