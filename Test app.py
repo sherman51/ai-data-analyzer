@@ -33,25 +33,11 @@ colors = {
     "Ad-hoc Critical": "#f06292"
 }
 
-# ---------- KPIs ----------
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
-with col2:
-    st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
-with col3:
-    st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
-
-st.markdown("---")
-
-# ---------- FIRST ROW: Summary Data & Order Breakdown ----------
-col_summary, col_breakdown = st.columns([1, 2])  # Summary takes less than half space
-
-with col_summary:
-    st.subheader("Summary Data")
-    st.dataframe(df_orders, use_container_width=True)
+# ---------- TOP ROW: Order Breakdown & Summary ----------
+col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
 
 with col_breakdown:
+    st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
     fig_breakdown = px.bar(
         order_breakdown,
         x="Orders",
@@ -70,9 +56,20 @@ with col_breakdown:
     )
     st.plotly_chart(fig_breakdown, use_container_width=True)
 
+with col_summary:
+    st.subheader("Summary Data")
+    st.dataframe(df_orders, use_container_width=True)
+
 st.markdown("---")
 
-# ---------- SECOND ROW: Order Trend & MTD Pie ----------
+# ---------- SECOND ROW: KPIs for Order Trend ----------
+kpi1, kpi2 = st.columns(2)
+with kpi1:
+    st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
+with kpi2:
+    st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
+
+# ---------- THIRD ROW: Order Trend & MTD Pie ----------
 col_trend, col_mtd = st.columns([2, 1])
 
 with col_trend:
