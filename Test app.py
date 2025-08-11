@@ -98,53 +98,53 @@ if uploaded_file is not None:
 
 
 
-# Assuming today is defined
-today = datetime.today()
-
-# Generate date options for the next 4 days
-date_options = [(today + timedelta(days=i)).date() for i in range(4)]
-
-# Convert to string for display
-date_labels = [date.strftime("%Y-%m-%d") for date in date_options]
-
-# ---------- TOP ROW: Order Breakdown & Summary ----------
-col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
-
-with col_breakdown:
-    # ---------- DATE FILTER SELECTION ----------
-    selected_date_str = st.selectbox("Select Date", date_labels)
-
-    # Convert selected string back to date
-    selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
-
-    # Filter data based on the selected date
-    filtered_data = df_filtered[df_filtered['ExpDate'].dt.date == selected_date]
-
-    # Show total count in the selected date range
-    st.metric("Total Entries in Breakdown", len(filtered_data))
-
-    # Breakdown chart (example: count by 'Priority' or 'Status')
-    fig_breakdown = px.bar(
-        filtered_data,
-        x="Priority",  # Example of categorizing by Priority
-        title="Priority Breakdown",
-        color="Priority",
-        color_discrete_map=colors
-    )
-    fig_breakdown.update_layout(
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(color="#333333"),
-        xaxis_title="Priority",
-        yaxis_title="Count"
-    )
-    st.plotly_chart(fig_breakdown, use_container_width=True)
-
-with col_summary:
-    st.subheader("Summary Data")
-    st.dataframe(filtered_data, use_container_width=True)
-
-st.markdown("---")
+    # Assuming today is defined
+    today = datetime.today()
+    
+    # Generate date options for the next 4 days
+    date_options = [(today + timedelta(days=i)).date() for i in range(4)]
+    
+    # Convert to string for display
+    date_labels = [date.strftime("%Y-%m-%d") for date in date_options]
+    
+    # ---------- TOP ROW: Order Breakdown & Summary ----------
+    col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
+    
+    with col_breakdown:
+        # ---------- DATE FILTER SELECTION ----------
+        selected_date_str = st.selectbox("Select Date", date_labels)
+    
+        # Convert selected string back to date
+        selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+    
+        # Filter data based on the selected date
+        filtered_data = df_filtered[df_filtered['ExpDate'].dt.date == selected_date]
+    
+        # Show total count in the selected date range
+        st.metric("Total Entries in Breakdown", len(filtered_data))
+    
+        # Breakdown chart (example: count by 'Priority' or 'Status')
+        fig_breakdown = px.bar(
+            filtered_data,
+            x="Priority",  # Example of categorizing by Priority
+            title="Priority Breakdown",
+            color="Priority",
+            color_discrete_map=colors
+        )
+        fig_breakdown.update_layout(
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            font=dict(color="#333333"),
+            xaxis_title="Priority",
+            yaxis_title="Count"
+        )
+        st.plotly_chart(fig_breakdown, use_container_width=True)
+    
+    with col_summary:
+        st.subheader("Summary Data")
+        st.dataframe(filtered_data, use_container_width=True)
+    
+    st.markdown("---")
 
 
 
@@ -153,6 +153,7 @@ st.markdown("---")
 
 else:
     st.info("Please upload an Excel file to get started.")
+
 
 
 
