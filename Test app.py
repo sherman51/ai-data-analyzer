@@ -79,7 +79,7 @@ if uploaded_file is not None:
 else:
     st.info("Please upload an Excel file to get started.")
 
-def blockout()
+def blockout():
             # ---------- SECOND ROW: KPIs ----------
             kpi1, kpi2 = st.columns(2)
             with kpi1:
@@ -128,4 +128,5 @@ def blockout()
                     font=dict(color="#333333")
                 )
                 st.plotly_chart(fig_mtd, use_container_width=True)
+
 
