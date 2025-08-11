@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import numpy as np
 from datetime import datetime, timedelta
 
 # ---------- PAGE CONFIG ----------
@@ -22,24 +21,23 @@ uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 if uploaded_file is not None:
     try:
-        # Read the uploaded Excel file into DataFrames
-        df_orders = pd.read_excel(uploaded_file, sheet_name="Orders")  # Ensure sheet name is correct
-        order_breakdown = pd.read_excel(uploaded_file, sheet_name="Order Breakdown")  # Ensure this sheet exists
+        # Read the uploaded Excel file into DataFrame (assuming the sheet is named "Orders")
+        df = pd.read_excel(uploaded_file, sheet_name="Orders")  # Adjust sheet name if necessary
         
-        # Validate columns in the Orders sheet
-        required_columns = ["Date", "Orders Received", "Orders Cancelled"]
-        if not all(col in df_orders.columns for col in required_columns):
-            st.error(f"Missing required columns in the Orders sheet: {required_columns}")
+        # Validate required columns
+        required_columns = ["CreatedOn", "Priority", "GINo", "StorageZone", "Status"]
+        if not all(col in df.columns for col in required_columns):
+            st.error(f"Missing required columns: {required_columns}")
         else:
             st.success("File uploaded successfully!")
 
             # ---------- DATA PROCESSING ----------
-            # Ensure the 'Date' column is datetime format
-            df_orders["Date"] = pd.to_datetime(df_orders["Date"], errors='coerce')
+            # Ensure 'CreatedOn' column is in datetime format
+            df["CreatedOn"] = pd.to_datetime(df["CreatedOn"], errors='coerce')
 
-            # Calculate today's date and filter data based on that
+            # Filter data based on today's date and selected date range
             today = datetime.today()
-            df_orders_filtered = df_orders[df_orders["Date"] <= today]
+            df_filtered = df[df["CreatedOn"] <= today]
 
             # ---------- TOP ROW: Order Breakdown & Summary ----------
             col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
@@ -65,27 +63,25 @@ if uploaded_file is not None:
                     selected_date = today + timedelta(days=3)
 
                 # Filter data based on the selected date
-                filtered_data = df_orders_filtered[df_orders_filtered['Date'] == selected_date]
+                filtered_data = df_filtered[df_filtered['CreatedOn'].dt.date == selected_date.date()]
 
-                # Show total orders in the selected date range
-                st.metric("Total Orders in Breakdown", int(filtered_data["Orders Received"].sum()))
-                
-                # Order breakdown chart
+                # Show total count in the selected date range
+                st.metric("Total Entries in Breakdown", len(filtered_data))
+
+                # Breakdown chart (example: count by 'Priority' or 'Status')
                 fig_breakdown = px.bar(
-                    order_breakdown,
-                    x="Orders",
-                    y="Category",
-                    orientation="h",
-                    title="Order Breakdown",
-                    color="Category",
+                    filtered_data,
+                    x="Priority",  # Example of categorizing by Priority
+                    title="Priority Breakdown",
+                    color="Priority",
                     color_discrete_map=colors
                 )
                 fig_breakdown.update_layout(
                     plot_bgcolor="white",
                     paper_bgcolor="white",
                     font=dict(color="#333333"),
-                    yaxis=dict(categoryorder="total ascending"),
-                    xaxis_title="Number of Orders"
+                    xaxis_title="Priority",
+                    yaxis_title="Count"
                 )
                 st.plotly_chart(fig_breakdown, use_container_width=True)
 
@@ -95,49 +91,48 @@ if uploaded_file is not None:
 
             st.markdown("---")
 
-            # ---------- SECOND ROW: KPIs for Order Trend ----------
+            # ---------- SECOND ROW: KPIs for Entry Count ----------
             kpi1, kpi2 = st.columns(2)
             with kpi1:
-                st.metric("Total Orders Received", int(df_orders_filtered["Orders Received"].sum()))
+                st.metric("Total Entries", len(df_filtered))
             with kpi2:
-                st.metric("Total Orders Cancelled", int(df_orders_filtered["Orders Cancelled"].sum()))
+                st.metric("Total Distinct GINo", df_filtered["GINo"].nunique())
 
-            # ---------- THIRD ROW: Order Trend & MTD Pie ----------
+            # ---------- THIRD ROW: Entry Trend & MTD Pie ----------
             col_trend, col_mtd = st.columns([2, 1])
 
             with col_trend:
-                df_orders_long = df_orders_filtered.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
+                # Melting the data for trend chart
+                df_long = df_filtered.melt(id_vars=["CreatedOn"], var_name="Category", value_name="Count")
                 fig_trend = px.bar(
-                    df_orders_long,
-                    x="Date",
+                    df_long,
+                    x="CreatedOn",
                     y="Count",
-                    color="Order Type",
+                    color="Category",
                     barmode="group",
-                    title="Order Trend",
+                    title="Entry Trend",
                     color_discrete_map=colors
                 )
                 fig_trend.update_layout(
                     plot_bgcolor="white",
                     paper_bgcolor="white",
                     font=dict(color="#333333"),
-                    xaxis_title="Date",
-                    yaxis_title="Number of Orders"
+                    xaxis_title="CreatedOn",
+                    yaxis_title="Count"
                 )
                 st.plotly_chart(fig_trend, use_container_width=True)
 
             with col_mtd:
-                # MTD Orders
-                mtd_orders = {
-                    "Orders Received": df_orders_filtered["Orders Received"].sum(),
-                    "Orders Cancelled": df_orders_filtered["Orders Cancelled"].sum()
-                }
-                df_mtd = pd.DataFrame(list(mtd_orders.items()), columns=["Type", "Count"])
+                # MTD Count for 'Status'
+                status_count = df_filtered["Status"].value_counts()
+                df_mtd = pd.DataFrame(status_count).reset_index()
+                df_mtd.columns = ["Status", "Count"]
                 fig_mtd = px.pie(
                     df_mtd,
-                    names="Type",
+                    names="Status",
                     values="Count",
-                    title="Month-to-Date Orders",
-                    color="Type",
+                    title="Month-to-Date Status Distribution",
+                    color="Status",
                     color_discrete_map=colors
                 )
                 fig_mtd.update_layout(
