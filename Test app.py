@@ -1,90 +1,117 @@
+# streamlit_app.py
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 import plotly.express as px
+from datetime import datetime
 
-# ===================== PAGE CONFIG =====================
-st.set_page_config(
-    page_title="📊 GI Analysis Dashboard",
-    layout="wide",
-    initial_sidebar_state="expanded"
+# Page config
+st.set_page_config(page_title="Outbound Dashboard", layout="wide")
+st.markdown(
+    """
+    <style>
+        body {background-color: #0e2a47;}
+        .block-container {padding-top: 1rem; padding-bottom: 0rem;}
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
-# ===================== STYLING =====================
-st.markdown("""
-    <style>
-        /* Background */
-        .stApp {
-            background-color: #f9f9f9;
-        }
+# Sample Data
+dates = pd.date_range(start="2023-07-03", periods=14, freq="D")
+orders_received = [40, 48, 30, 0, 42, 0, 45, 0, 60, 55, 58, 62, 70, 0]
+orders_cancelled = [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-        /* Cards */
-        .metric-card {
-            padding: 20px;
-            border-radius: 12px;
-            background-color: white;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-            text-align: center;
-        }
+# KPI values
+past_2_weeks_orders = sum(orders_received)
+avg_daily_orders = past_2_weeks_orders / len(dates)
+daily_orders = 84
+current_date = "17 Jul 2023"
 
-        /* Titles */
-        h1, h2, h3 {
-            font-family: 'Segoe UI', sans-serif;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# Header & KPIs
+col1, col2, col3, col4 = st.columns([2,1,1,1])
+with col1:
+    st.markdown("## 🏥 SSW Healthcare - **Outbound Dashboard**")
+with col2:
+    st.metric("Past 2 Weeks Orders", f"{past_2_weeks_orders}")
+with col3:
+    st.metric("Avg. Daily Orders", f"{avg_daily_orders:.1f}")
+with col4:
+    st.metric("Daily Outbound Orders", f"{daily_orders}", help=current_date)
 
-# ===================== SIDEBAR =====================
-st.sidebar.header("⚙️ Dashboard Settings")
-uploaded_file = st.sidebar.file_uploader("Upload GI Analysis Excel", type=["xls", "xlsx"])
-view_option = st.sidebar.selectbox("Select View", ["Summary", "Detailed Analysis"])
-
-# ===================== MOCK DATA =====================
-# For now we just use mock data (replace later with Excel parsing)
-df = pd.DataFrame({
-    "GI_No": [101, 102, 103, 104, 105],
-    "Volume": [230000, 180000, 310000, 275000, 199000],
-    "Category": ["Nito", "Oxy", "Nito", "Oxy", "Nito"]
+# Orders Trend Chart
+df_orders = pd.DataFrame({
+    "Date": dates,
+    "Orders Received": orders_received,
+    "Orders Cancelled": orders_cancelled
 })
 
-# ===================== SUMMARY METRICS =====================
-st.title("📊 GI Analysis Dashboard")
+fig_orders = go.Figure()
+fig_orders.add_trace(go.Bar(x=df_orders["Date"], y=df_orders["Orders Received"], name="Orders Received", marker_color="#7CFC00"))
+fig_orders.add_trace(go.Bar(x=df_orders["Date"], y=df_orders["Orders Cancelled"], name="Orders Cancelled", marker_color="orange"))
+fig_orders.update_layout(
+    barmode="group",
+    plot_bgcolor="#0e2a47",
+    paper_bgcolor="#0e2a47",
+    font=dict(color="white"),
+    title="Orders in Past 2 Weeks"
+)
+st.plotly_chart(fig_orders, use_container_width=True)
 
-col1, col2, col3 = st.columns(3)
+# Month to Date Gauges
+col1, col2 = st.columns(2)
+
 with col1:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Total GIs", len(df))
-    st.markdown('</div>', unsafe_allow_html=True)
+    fig_back = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=0.10,
+        gauge={'axis': {'range': [0, 1]}, 'bar': {'color': "#7CFC00"}},
+        title={'text': "Back Order %", 'font': {'size': 24}}
+    ))
+    fig_back.update_layout(paper_bgcolor="#0e2a47", font=dict(color="white"))
+    st.plotly_chart(fig_back, use_container_width=True)
 
 with col2:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Total Volume", f"{df['Volume'].sum():,}")
-    st.markdown('</div>', unsafe_allow_html=True)
+    fig_accuracy = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=1.00,
+        gauge={'axis': {'range': [0, 1]}, 'bar': {'color': "#7CFC00"}},
+        title={'text': "Order Accuracy %", 'font': {'size': 24}}
+    ))
+    fig_accuracy.update_layout(paper_bgcolor="#0e2a47", font=dict(color="white"))
+    st.plotly_chart(fig_accuracy, use_container_width=True)
 
-with col3:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Average Volume", f"{df['Volume'].mean():,.0f}")
-    st.markdown('</div>', unsafe_allow_html=True)
+# Horizontal Stacked Bar for Order Breakdown
+breakdown = pd.DataFrame({
+    "Category": ["Back Orders", "Scheduled Orders", "Ad-hoc Normal Orders", "Ad-hoc Urgent Orders", "Ad-hoc Critical Orders"],
+    "Tpt Booked": [2, 5, 10, 4, 3],
+    "Packed/Partial Packed": [4, 6, 7, 2, 0],
+    "Picked/Partial Picked": [3, 13, 3, 0, 3],
+    "Open": [2, 17, 0, 0, 0]
+})
 
-# ===================== CHARTS =====================
-col_chart1, col_chart2 = st.columns(2)
+colors = ["#7CFC00", "#ADD8E6", "#FFD700", "#FFB6C1"]
 
-with col_chart1:
-    fig1 = px.bar(
-        df, x="GI_No", y="Volume", color="Category",
-        title="Past 2 week orders",
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+fig_breakdown = go.Figure()
+for i, col in enumerate(["Tpt Booked", "Packed/Partial Packed", "Picked/Partial Picked", "Open"]):
+    fig_breakdown.add_trace(go.Bar(
+        y=breakdown["Category"],
+        x=breakdown[col],
+        name=col,
+        orientation='h',
+        marker_color=colors[i]
+    ))
 
-with col_chart2:
-    fig2 = px.pie(
-        df, names="Category", values="Volume",
-        title="Volume Share by Category",
-        color_discrete_sequence=px.colors.qualitative.Set3
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+fig_breakdown.update_layout(
+    barmode="stack",
+    plot_bgcolor="#0e2a47",
+    paper_bgcolor="#0e2a47",
+    font=dict(color="white"),
+    title="Order Breakdown"
+)
+st.plotly_chart(fig_breakdown, use_container_width=True)
 
-# ===================== TABLE =====================
-st.subheader("📋 Detailed Data")
-st.dataframe(df, use_container_width=True)
+# Summary Table
+st.markdown("### Summary Table")
+st.dataframe(breakdown.style.applymap(lambda v: "color:white;background-color:#0e2a47"))
 
