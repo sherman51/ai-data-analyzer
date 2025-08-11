@@ -42,12 +42,40 @@ with col2:
 with col3:
     st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
 
-# ---------- FIRST ROW: Order Trend & MTD Pie ----------
-st.markdown("---")  # muted divider
-col_left, col_right = st.columns([2, 1])
+st.markdown("---")
 
-# Order Trend Bar Chart
-with col_left:
+# ---------- FIRST ROW: Summary Data & Order Breakdown ----------
+col_summary, col_breakdown = st.columns([1, 2])  # Summary takes less than half space
+
+with col_summary:
+    st.subheader("Summary Data")
+    st.dataframe(df_orders, use_container_width=True)
+
+with col_breakdown:
+    fig_breakdown = px.bar(
+        order_breakdown,
+        x="Orders",
+        y="Category",
+        orientation="h",
+        title="Order Breakdown",
+        color="Category",
+        color_discrete_map=colors
+    )
+    fig_breakdown.update_layout(
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(color="#333333"),
+        yaxis=dict(categoryorder="total ascending"),
+        xaxis_title="Number of Orders"
+    )
+    st.plotly_chart(fig_breakdown, use_container_width=True)
+
+st.markdown("---")
+
+# ---------- SECOND ROW: Order Trend & MTD Pie ----------
+col_trend, col_mtd = st.columns([2, 1])
+
+with col_trend:
     df_orders_long = df_orders.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
     fig_trend = px.bar(
         df_orders_long,
@@ -67,8 +95,7 @@ with col_left:
     )
     st.plotly_chart(fig_trend, use_container_width=True)
 
-# Month-to-Date Pie Chart
-with col_right:
+with col_mtd:
     mtd_orders = {
         "Orders Received": df_orders["Orders Received"].sum(),
         "Orders Cancelled": df_orders["Orders Cancelled"].sum()
@@ -88,32 +115,3 @@ with col_right:
         font=dict(color="#333333")
     )
     st.plotly_chart(fig_mtd, use_container_width=True)
-
-# ---------- SECOND ROW: Order Breakdown & Summary ----------
-st.markdown("---")  # muted divider
-col_left2, col_right2 = st.columns([1, 2])
-
-# Order Breakdown Bar Chart
-with col_left2:
-    fig_breakdown = px.bar(
-        order_breakdown,
-        x="Orders",
-        y="Category",
-        orientation="h",
-        title="Order Breakdown",
-        color="Category",
-        color_discrete_map=colors
-    )
-    fig_breakdown.update_layout(
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(color="#333333"),
-        yaxis=dict(categoryorder="total ascending"),
-        xaxis_title="Number of Orders"
-    )
-    st.plotly_chart(fig_breakdown, use_container_width=True)
-
-# Summary Table
-with col_right2:
-    st.subheader("Summary Data")
-    st.dataframe(df_orders, use_container_width=True)
