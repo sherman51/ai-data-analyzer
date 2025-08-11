@@ -74,6 +74,12 @@ if uploaded_file is not None:
 
             st.markdown("---")
 
+    except Exception as e:
+        st.error(f"Error reading the Excel file: {e}")
+else:
+    st.info("Please upload an Excel file to get started.")
+
+def blockout()
             # ---------- SECOND ROW: KPIs ----------
             kpi1, kpi2 = st.columns(2)
             with kpi1:
@@ -123,7 +129,3 @@ if uploaded_file is not None:
                 )
                 st.plotly_chart(fig_mtd, use_container_width=True)
 
-    except Exception as e:
-        st.error(f"Error reading the Excel file: {e}")
-else:
-    st.info("Please upload an Excel file to get started.")
