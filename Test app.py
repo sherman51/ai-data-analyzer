@@ -133,23 +133,26 @@ with col_mtd:
         showlegend=True
     ), 1, 2)
 
-    # Annotations for targets, percentages, and counts
+    # Annotations with consistent alignment
     fig_mtd.update_layout(
         annotations=[
-            dict(text="<0.50%", x=0.18, y=1.05, font_size=14, font_color="green", showarrow=False),
+            # Back Order
+            dict(text="<0.50%", x=0.18, y=1.15, font_size=14, font_color="green", showarrow=False),
             dict(text=f"{back_order_pct:.2f}%", x=0.18, y=0.5, font_size=20, font_color="green", showarrow=False),
-            dict(text=str(back_orders), x=0.3, y=0.8, font_size=12, font_color="#333333", showarrow=False),
-            dict(text=str(total_lines), x=0.07, y=0.2, font_size=12, font_color="#333333", showarrow=False),
+            dict(text=str(back_orders), x=0.18, y=0.68, font_size=12, font_color="#333333", showarrow=False),
+            dict(text=str(total_lines), x=0.18, y=0.32, font_size=12, font_color="#333333", showarrow=False),
 
-            dict(text=">99.50%", x=0.82, y=1.05, font_size=14, font_color="green", showarrow=False),
+            # Order Accuracy
+            dict(text=">99.50%", x=0.82, y=1.15, font_size=14, font_color="green", showarrow=False),
             dict(text=f"{order_accuracy_pct:.2f}%", x=0.82, y=0.5, font_size=20, font_color="green", showarrow=False),
-            dict(text=str(sla_not_met), x=0.93, y=0.8, font_size=12, font_color="#333333", showarrow=False),
-            dict(text=str(total_lines), x=0.7, y=0.2, font_size=12, font_color="#333333", showarrow=False)
+            dict(text=str(sla_not_met), x=0.82, y=0.68, font_size=12, font_color="#333333", showarrow=False),
+            dict(text=str(total_lines), x=0.82, y=0.32, font_size=12, font_color="#333333", showarrow=False)
         ],
         plot_bgcolor="white",
         paper_bgcolor="white",
         font=dict(color="#333333"),
-        legend=dict(orientation="h", y=-0.1)
+        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center")
     )
 
     st.plotly_chart(fig_mtd, use_container_width=True)
+
