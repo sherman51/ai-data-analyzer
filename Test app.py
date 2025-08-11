@@ -33,13 +33,43 @@ colors = {
     "Ad-hoc Critical": "#f06292"
 }
 
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from datetime import datetime, timedelta
+
+# Assuming you have a column 'Date' in df_orders which stores the order date
+
+# ---------- DATE FILTER SELECTION ----------
+today = datetime.today()
+date_options = [
+    "Today", 
+    "Today +1", 
+    "Today +2", 
+    "Today +3"
+]
+selected_date_option = st.selectbox("Select Date Range", date_options)
+
+# Calculate the selected date offset
+if selected_date_option == "Today":
+    selected_date = today
+elif selected_date_option == "Today +1":
+    selected_date = today + timedelta(days=1)
+elif selected_date_option == "Today +2":
+    selected_date = today + timedelta(days=2)
+elif selected_date_option == "Today +3":
+    selected_date = today + timedelta(days=3)
+
+# Filter data based on the selected date
+filtered_data = df_orders[df_orders['Date'] == selected_date.date()]
+
 # ---------- TOP ROW: Order Breakdown & Summary ----------
 col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
 
 with col_breakdown:
-    st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
+    st.metric("Total Orders in Breakdown", int(filtered_data["Orders"].sum()))
     fig_breakdown = px.bar(
-        order_breakdown,
+        filtered_data,
         x="Orders",
         y="Category",
         orientation="h",
@@ -58,7 +88,7 @@ with col_breakdown:
 
 with col_summary:
     st.subheader("Summary Data")
-    st.dataframe(df_orders, use_container_width=True)
+    st.dataframe(filtered_data, use_container_width=True)
 
 st.markdown("---")
 
@@ -112,3 +142,4 @@ with col_mtd:
         font=dict(color="#333333")
     )
     st.plotly_chart(fig_mtd, use_container_width=True)
+
