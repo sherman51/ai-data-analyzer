@@ -91,8 +91,8 @@ if uploaded_file is not None:
 
             st.markdown("---")
 
-      '''      # ---------- SECOND ROW: KPIs for Entry Count ----------
-            kpi1, kpi2 = st.columns(2)
+        # ---------- SECOND ROW: KPIs for Entry Count ----------
+      '''      kpi1, kpi2 = st.columns(2)
             with kpi1:
                 st.metric("Total Entries", len(df_filtered))
             with kpi2:
@@ -147,4 +147,5 @@ if uploaded_file is not None:
 
 else:
     st.info("Please upload an Excel file to get started.")
+
 
