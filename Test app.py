@@ -34,7 +34,7 @@ colors = {
 }
 
 # ---------- TOP ROW: Order Breakdown & Summary ----------
-col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
+col_breakdown, col_summary = st.columns([2, 1])
 
 with col_breakdown:
     st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
@@ -62,17 +62,18 @@ with col_summary:
 
 st.markdown("---")
 
-# ---------- SECOND ROW: KPIs for Order Trend ----------
-kpi1, kpi2 = st.columns(2)
-with kpi1:
-    st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
-with kpi2:
-    st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
-
-# ---------- THIRD ROW: Order Trend & MTD Pie ----------
+# ---------- SECOND ROW: Order Trend (with KPIs) & MTD Pie ----------
 col_trend, col_mtd = st.columns([2, 1])
 
 with col_trend:
+    # KPIs for Order Trend
+    kpi1, kpi2 = st.columns(2)
+    with kpi1:
+        st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
+    with kpi2:
+        st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
+
+    # Order Trend Chart
     df_orders_long = df_orders.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
     fig_trend = px.bar(
         df_orders_long,
