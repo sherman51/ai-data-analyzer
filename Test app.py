@@ -52,12 +52,14 @@ if uploaded_file is not None:
 
                 st.metric("Total Entries in Breakdown", len(filtered_data))
 
+                # Priority Breakdown (Sideways Bar Graph)
                 fig_breakdown = px.bar(
                     filtered_data,
-                    x="Priority",
+                    x="Priority",  # X-axis represents the Priority
                     title="Priority Breakdown",
                     color="Priority",
-                    color_discrete_map=colors
+                    color_discrete_map=colors,
+                    orientation="h"  # Change this to horizontal bars (sideways)
                 )
                 fig_breakdown.update_layout(
                     plot_bgcolor="white",
@@ -80,53 +82,51 @@ else:
     st.info("Please upload an Excel file to get started.")
 
 def blockout():
-            # ---------- SECOND ROW: KPIs ----------
-            kpi1, kpi2 = st.columns(2)
-            with kpi1:
-                st.metric("Total Entries", len(df_full))
-            with kpi2:
-                st.metric("Total Distinct GINo", df_full["GINo"].nunique())
+    # ---------- SECOND ROW: KPIs ----------
+    kpi1, kpi2 = st.columns(2)
+    with kpi1:
+        st.metric("Total Entries", len(df_full))
+    with kpi2:
+        st.metric("Total Distinct GINo", df_full["GINo"].nunique())
 
-            # ---------- THIRD ROW: Entry Trend & MTD Pie ----------
-            col_trend, col_mtd = st.columns([2, 1])
+    # ---------- THIRD ROW: Entry Trend & MTD Pie ----------
+    col_trend, col_mtd = st.columns([2, 1])
 
-            with col_trend:
-                df_long = df_full.melt(id_vars=["ExpDate"], var_name="Category", value_name="Count")
-                fig_trend = px.bar(
-                    df_long,
-                    x="ExpDate",
-                    y="Count",
-                    color="Category",
-                    barmode="group",
-                    title="Entry Trend",
-                    color_discrete_map=colors
-                )
-                fig_trend.update_layout(
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
-                    font=dict(color="#333333"),
-                    xaxis_title="ExpDate",
-                    yaxis_title="Count"
-                )
-                st.plotly_chart(fig_trend, use_container_width=True)
+    with col_trend:
+        df_long = df_full.melt(id_vars=["ExpDate"], var_name="Category", value_name="Count")
+        fig_trend = px.bar(
+            df_long,
+            x="ExpDate",
+            y="Count",
+            color="Category",
+            barmode="group",
+            title="Entry Trend",
+            color_discrete_map=colors
+        )
+        fig_trend.update_layout(
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            font=dict(color="#333333"),
+            xaxis_title="ExpDate",
+            yaxis_title="Count"
+        )
+        st.plotly_chart(fig_trend, use_container_width=True)
 
-            with col_mtd:
-                status_count = df_full["Status"].value_counts()
-                df_mtd = pd.DataFrame(status_count).reset_index()
-                df_mtd.columns = ["Status", "Count"]
-                fig_mtd = px.pie(
-                    df_mtd,
-                    names="Status",
-                    values="Count",
-                    title="Month-to-Date Status Distribution",
-                    color="Status",
-                    color_discrete_map=colors
-                )
-                fig_mtd.update_layout(
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
-                    font=dict(color="#333333")
-                )
-                st.plotly_chart(fig_mtd, use_container_width=True)
-
-
+    with col_mtd:
+        status_count = df_full["Status"].value_counts()
+        df_mtd = pd.DataFrame(status_count).reset_index()
+        df_mtd.columns = ["Status", "Count"]
+        fig_mtd = px.pie(
+            df_mtd,
+            names="Status",
+            values="Count",
+            title="Month-to-Date Status Distribution",
+            color="Status",
+            color_discrete_map=colors
+        )
+        fig_mtd.update_layout(
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            font=dict(color="#333333")
+        )
+        st.plotly_chart(fig_mtd, use_container_width=True)
