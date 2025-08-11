@@ -4,24 +4,6 @@ import plotly.express as px
 import numpy as np
 from datetime import datetime, timedelta
 
-# ---------- SAMPLE DATA ----------
-np.random.seed(42)
-dates = pd.date_range(start="2025-07-01", periods=30, freq='D')
-orders_received = np.random.randint(80, 150, size=30)
-orders_cancelled = np.random.randint(5, 20, size=30)
-
-# Sample data to display before upload
-df_orders = pd.DataFrame({
-    "Date": dates,
-    "Orders Received": orders_received,
-    "Orders Cancelled": orders_cancelled
-})
-
-order_breakdown = pd.DataFrame({
-    "Category": ["Scheduled", "Ad-hoc Normal", "Ad-hoc Urgent", "Ad-hoc Critical"],
-    "Orders": [120, 90, 45, 20]
-})
-
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Operations Dashboard", layout="wide")
 
@@ -40,116 +22,133 @@ uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 if uploaded_file is not None:
     try:
-        # Read the uploaded Excel file into a DataFrame
-        df_orders = pd.read_excel(uploaded_file, sheet_name="Orders")  # Make sure sheet name is correct
+        # Read the uploaded Excel file into DataFrames
+        df_orders = pd.read_excel(uploaded_file, sheet_name="Orders")  # Ensure sheet name is correct
         order_breakdown = pd.read_excel(uploaded_file, sheet_name="Order Breakdown")  # Ensure this sheet exists
-        st.success("File uploaded successfully!")
+        
+        # Validate columns in the Orders sheet
+        required_columns = ["Date", "Orders Received", "Orders Cancelled"]
+        if not all(col in df_orders.columns for col in required_columns):
+            st.error(f"Missing required columns in the Orders sheet: {required_columns}")
+        else:
+            st.success("File uploaded successfully!")
+
+            # ---------- DATA PROCESSING ----------
+            # Ensure the 'Date' column is datetime format
+            df_orders["Date"] = pd.to_datetime(df_orders["Date"], errors='coerce')
+
+            # Calculate today's date and filter data based on that
+            today = datetime.today()
+            df_orders_filtered = df_orders[df_orders["Date"] <= today]
+
+            # ---------- TOP ROW: Order Breakdown & Summary ----------
+            col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
+
+            with col_breakdown:
+                # ---------- DATE FILTER SELECTION ----------
+                date_options = [
+                    "Today", 
+                    "Today +1", 
+                    "Today +2", 
+                    "Today +3"
+                ]
+                selected_date_option = st.selectbox("Select Date Range", date_options)
+
+                # Calculate the selected date offset
+                if selected_date_option == "Today":
+                    selected_date = today
+                elif selected_date_option == "Today +1":
+                    selected_date = today + timedelta(days=1)
+                elif selected_date_option == "Today +2":
+                    selected_date = today + timedelta(days=2)
+                elif selected_date_option == "Today +3":
+                    selected_date = today + timedelta(days=3)
+
+                # Filter data based on the selected date
+                filtered_data = df_orders_filtered[df_orders_filtered['Date'] == selected_date]
+
+                # Show total orders in the selected date range
+                st.metric("Total Orders in Breakdown", int(filtered_data["Orders Received"].sum()))
+                
+                # Order breakdown chart
+                fig_breakdown = px.bar(
+                    order_breakdown,
+                    x="Orders",
+                    y="Category",
+                    orientation="h",
+                    title="Order Breakdown",
+                    color="Category",
+                    color_discrete_map=colors
+                )
+                fig_breakdown.update_layout(
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    font=dict(color="#333333"),
+                    yaxis=dict(categoryorder="total ascending"),
+                    xaxis_title="Number of Orders"
+                )
+                st.plotly_chart(fig_breakdown, use_container_width=True)
+
+            with col_summary:
+                st.subheader("Summary Data")
+                st.dataframe(filtered_data, use_container_width=True)
+
+            st.markdown("---")
+
+            # ---------- SECOND ROW: KPIs for Order Trend ----------
+            kpi1, kpi2 = st.columns(2)
+            with kpi1:
+                st.metric("Total Orders Received", int(df_orders_filtered["Orders Received"].sum()))
+            with kpi2:
+                st.metric("Total Orders Cancelled", int(df_orders_filtered["Orders Cancelled"].sum()))
+
+            # ---------- THIRD ROW: Order Trend & MTD Pie ----------
+            col_trend, col_mtd = st.columns([2, 1])
+
+            with col_trend:
+                df_orders_long = df_orders_filtered.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
+                fig_trend = px.bar(
+                    df_orders_long,
+                    x="Date",
+                    y="Count",
+                    color="Order Type",
+                    barmode="group",
+                    title="Order Trend",
+                    color_discrete_map=colors
+                )
+                fig_trend.update_layout(
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    font=dict(color="#333333"),
+                    xaxis_title="Date",
+                    yaxis_title="Number of Orders"
+                )
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+            with col_mtd:
+                # MTD Orders
+                mtd_orders = {
+                    "Orders Received": df_orders_filtered["Orders Received"].sum(),
+                    "Orders Cancelled": df_orders_filtered["Orders Cancelled"].sum()
+                }
+                df_mtd = pd.DataFrame(list(mtd_orders.items()), columns=["Type", "Count"])
+                fig_mtd = px.pie(
+                    df_mtd,
+                    names="Type",
+                    values="Count",
+                    title="Month-to-Date Orders",
+                    color="Type",
+                    color_discrete_map=colors
+                )
+                fig_mtd.update_layout(
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    font=dict(color="#333333")
+                )
+                st.plotly_chart(fig_mtd, use_container_width=True)
+
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
 
-# ---------- TOP ROW: Order Breakdown & Summary ----------
-col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
-
-with col_breakdown:
-    # ---------- DATE FILTER SELECTION ----------
-    today = datetime.today()
-    date_options = [
-        "Today", 
-        "Today +1", 
-        "Today +2", 
-        "Today +3"
-    ]
-    selected_date_option = st.selectbox("Select Date Range", date_options)
-
-    # Calculate the selected date offset
-    if selected_date_option == "Today":
-        selected_date = today
-    elif selected_date_option == "Today +1":
-        selected_date = today + timedelta(days=1)
-    elif selected_date_option == "Today +2":
-        selected_date = today + timedelta(days=2)
-    elif selected_date_option == "Today +3":
-        selected_date = today + timedelta(days=3)
-
-    # Filter data based on the selected date
-    filtered_data = df_orders[df_orders['Date'] == selected_date.date()]
-
-    st.metric("Total Orders in Breakdown", int(filtered_data["Orders Received"].sum()))
-    
-    # Order breakdown chart
-    fig_breakdown = px.bar(
-        order_breakdown,
-        x="Orders",
-        y="Category",
-        orientation="h",
-        title="Order Breakdown",
-        color="Category",
-        color_discrete_map=colors
-    )
-    fig_breakdown.update_layout(
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(color="#333333"),
-        yaxis=dict(categoryorder="total ascending"),
-        xaxis_title="Number of Orders"
-    )
-    st.plotly_chart(fig_breakdown, use_container_width=True)
-
-with col_summary:
-    st.subheader("Summary Data")
-    st.dataframe(filtered_data, use_container_width=True)
-
-st.markdown("---")
-
-# ---------- SECOND ROW: KPIs for Order Trend ----------
-kpi1, kpi2 = st.columns(2)
-with kpi1:
-    st.metric("Total Orders Received", 0)
-with kpi2:
-    st.metric("Total Orders Cancelled", 100)
-
-# ---------- THIRD ROW: Order Trend & MTD Pie ----------
-col_trend, col_mtd = st.columns([2, 1])
-
-with col_trend:
-    df_orders_long = df_orders.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
-    fig_trend = px.bar(
-        df_orders_long,
-        x="Date",
-        y="Count",
-        color="Order Type",
-        barmode="group",
-        title="Order Trend",
-        color_discrete_map=colors
-    )
-    fig_trend.update_layout(
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(color="#333333"),
-        xaxis_title="Date",
-        yaxis_title="Number of Orders"
-    )
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-with col_mtd:
-    mtd_orders = {
-        "Orders Received": df_orders["Orders Received"].sum(),
-        "Orders Cancelled": df_orders["Orders Cancelled"].sum()
-    }
-    df_mtd = pd.DataFrame(list(mtd_orders.items()), columns=["Type", "Count"])
-    fig_mtd = px.pie(
-        df_mtd,
-        names="Type",
-        values="Count",
-        title="Month-to-Date Orders",
-        color="Type",
-        color_discrete_map=colors
-    )
-    fig_mtd.update_layout(
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(color="#333333")
-    )
-    st.plotly_chart(fig_mtd, use_container_width=True)
-
-
+else:
+    st.info("Please upload an Excel file to get started.")
