@@ -2,18 +2,17 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
 
 # ----- Color Theme -----
 COLORS = {
-    "background": "#1F2B38",           # Soft slate blue background
+    "background": "#3B4453",           # Soft warm grey-blue background
     "text": "#E8E9EB",                 # Off-white text
-    "tpt_booked": "#5DA8A3",           # Muted teal
-    "packed": "#7CA6C2",                # Muted sky blue
-    "picked": "#D4A373",                # Muted amber
-    "open": "#D27D72",                  # Muted coral red
-    "orders_received": "#5DA8A3",       # Same muted teal
-    "orders_cancelled": "#D27D72"       # Muted coral
+    "tpt_booked": "#7FA6A1",           # Muted teal
+    "packed": "#A0B9C6",               # Muted sky blue
+    "picked": "#D4B483",               # Muted amber
+    "open": "#D89A94",                 # Muted coral
+    "orders_received": "#7FA6A1",      # Muted teal
+    "orders_cancelled": "#D89A94"      # Muted coral
 }
 
 # ----- Page Config -----
@@ -21,16 +20,19 @@ st.set_page_config(page_title="Outbound Dashboard", layout="wide")
 st.markdown(
     f"""
     <style>
-        body {{
+        .stApp {{
             background-color: {COLORS['background']};
-            color: {COLORS['text']};
+        }}
+        .main {{
+            background-color: {COLORS['background']};
         }}
         .block-container {{
             padding-top: 1rem;
             padding-bottom: 0rem;
-        }}
-        h1, h2, h3, h4, h5, h6 {{
             color: {COLORS['text']};
+        }}
+        h1, h2, h3, h4, h5, h6, p, div {{
+            color: {COLORS['text']} !important;
         }}
     </style>
     """,
@@ -116,7 +118,7 @@ with col2:
     fig_accuracy.update_layout(paper_bgcolor=COLORS["background"], font=dict(color=COLORS["text"]))
     st.plotly_chart(fig_accuracy, use_container_width=True)
 
-# ----- Horizontal Stacked Bar for Order Breakdown -----
+# ----- Horizontal Stacked Bar -----
 breakdown = pd.DataFrame({
     "Category": ["Back Orders", "Scheduled Orders", "Ad-hoc Normal Orders", "Ad-hoc Urgent Orders", "Ad-hoc Critical Orders"],
     "Tpt Booked": [2, 5, 10, 4, 3],
