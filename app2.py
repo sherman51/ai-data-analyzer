@@ -37,6 +37,12 @@ if uploaded_file:
     if "GRType" in df.columns:
         df = df[df["GRType"].isin(gr_type_filter)]
 
+
+    # --- SIDEBAR SINGLE DATE FILTER ---
+    st.sidebar.header("🔍 Filter by Date")
+    available_dates = sorted(df['ExpDate'].dt.date.unique())
+    selected_date = st.sidebar.selectbox("Select a Date", options=available_dates)
+
     # ------------------------ DATA PREVIEW ------------------------
     st.subheader("🧹 Cleaned Dataset Preview")
     st.dataframe(df.head(50), use_container_width=True)
@@ -105,6 +111,7 @@ if uploaded_file:
 
 else:
     st.info("⬅ Please upload a Good Receive Excel file to begin.")
+
 
 
 
