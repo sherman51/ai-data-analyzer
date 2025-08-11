@@ -71,7 +71,7 @@ col_chart1, col_chart2 = st.columns(2)
 with col_chart1:
     fig1 = px.bar(
         df, x="GI_No", y="Volume", color="Category",
-        title="GI Volume by No.",
+        title="Past 2 week orders",
         color_discrete_sequence=px.colors.qualitative.Pastel
     )
     st.plotly_chart(fig1, use_container_width=True)
@@ -87,3 +87,4 @@ with col_chart2:
 # ===================== TABLE =====================
 st.subheader("📋 Detailed Data")
 st.dataframe(df, use_container_width=True)
+
