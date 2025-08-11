@@ -104,9 +104,9 @@ st.markdown("---")
 # ---------- SECOND ROW: KPIs for Order Trend ----------
 kpi1, kpi2 = st.columns(2)
 with kpi1:
-    st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
+    st.metric("Total Orders Received", 0
 with kpi2:
-    st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
+    st.metric("Total Orders Cancelled", 100
 
 # ---------- THIRD ROW: Order Trend & MTD Pie ----------
 col_trend, col_mtd = st.columns([2, 1])
@@ -151,3 +151,4 @@ with col_mtd:
         font=dict(color="#333333")
     )
     st.plotly_chart(fig_mtd, use_container_width=True)
+
