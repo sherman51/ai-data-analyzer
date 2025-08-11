@@ -96,57 +96,55 @@ if uploaded_file is not None:
             today = datetime.today()
             df_filtered = df[df["ExpDate"] <= today]
 
-            # ---------- TOP ROW: Order Breakdown & Summary ----------
-            col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
+from datetime import datetime, timedelta
 
-            with col_breakdown:
-                # ---------- DATE FILTER SELECTION ----------
-                date_options = [
-                    "Today", 
-                    "Today +1", 
-                    "Today +2", 
-                    "Today +3"
-                ]
-                selected_date_option = st.selectbox("Select Date Range", date_options)
+# Assuming today is defined
+today = datetime.today()
 
-                # Calculate the selected date offset
-                if selected_date_option == "Today":
-                    selected_date = today
-                elif selected_date_option == "Today +1":
-                    selected_date = today + timedelta(days=1)
-                elif selected_date_option == "Today +2":
-                    selected_date = today + timedelta(days=2)
-                elif selected_date_option == "Today +3":
-                    selected_date = today + timedelta(days=3)
+# Generate date options for the next 4 days
+date_options = [(today + timedelta(days=i)).date() for i in range(4)]
 
-                # Filter data based on the selected date
-                filtered_data = df_filtered[df_filtered['ExpDate'].dt.date == selected_date.date()]
+# Convert to string for display
+date_labels = [date.strftime("%Y-%m-%d") for date in date_options]
 
-                # Show total count in the selected date range
-                st.metric("Total Entries in Breakdown", len(filtered_data))
+# ---------- TOP ROW: Order Breakdown & Summary ----------
+col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
 
-                # Breakdown chart (example: count by 'Priority' or 'Status')
-                fig_breakdown = px.bar(
-                    filtered_data,
-                    x="Priority",  # Example of categorizing by Priority
-                    title="Priority Breakdown",
-                    color="Priority",
-                    color_discrete_map=colors
-                )
-                fig_breakdown.update_layout(
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
-                    font=dict(color="#333333"),
-                    xaxis_title="Priority",
-                    yaxis_title="Count"
-                )
-                st.plotly_chart(fig_breakdown, use_container_width=True)
+with col_breakdown:
+    # ---------- DATE FILTER SELECTION ----------
+    selected_date_str = st.selectbox("Select Date", date_labels)
 
-            with col_summary:
-                st.subheader("Summary Data")
-                st.dataframe(filtered_data, use_container_width=True)
+    # Convert selected string back to date
+    selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
 
-            st.markdown("---")
+    # Filter data based on the selected date
+    filtered_data = df_filtered[df_filtered['ExpDate'].dt.date == selected_date]
+
+    # Show total count in the selected date range
+    st.metric("Total Entries in Breakdown", len(filtered_data))
+
+    # Breakdown chart (example: count by 'Priority' or 'Status')
+    fig_breakdown = px.bar(
+        filtered_data,
+        x="Priority",  # Example of categorizing by Priority
+        title="Priority Breakdown",
+        color="Priority",
+        color_discrete_map=colors
+    )
+    fig_breakdown.update_layout(
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(color="#333333"),
+        xaxis_title="Priority",
+        yaxis_title="Count"
+    )
+    st.plotly_chart(fig_breakdown, use_container_width=True)
+
+with col_summary:
+    st.subheader("Summary Data")
+    st.dataframe(filtered_data, use_container_width=True)
+
+st.markdown("---")
 
 
 
@@ -155,6 +153,7 @@ if uploaded_file is not None:
 
 else:
     st.info("Please upload an Excel file to get started.")
+
 
 
 
