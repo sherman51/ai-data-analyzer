@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+from datetime import datetime, timedelta
 
 # ---------- SAMPLE DATA ----------
 np.random.seed(42)
@@ -33,10 +34,6 @@ colors = {
     "Ad-hoc Critical": "#f06292"
 }
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from datetime import datetime, timedelta
 
 # Assuming you have a column 'Date' in df_orders which stores the order date
 
@@ -142,4 +139,5 @@ with col_mtd:
         font=dict(color="#333333")
     )
     st.plotly_chart(fig_mtd, use_container_width=True)
+
 
