@@ -47,17 +47,24 @@ with col3:
 left_col, right_col = st.columns([2, 1])
 
 with left_col:
-    fig_trend = px.line(
-        df_orders, 
-        x="Date", 
-        y=["Orders Received", "Orders Cancelled"], 
+    # Convert to long format for grouped bar chart
+    df_orders_long = df_orders.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
+    
+    fig_trend = px.bar(
+        df_orders_long,
+        x="Date",
+        y="Count",
+        color="Order Type",
+        barmode="group",
         title="Order Trend",
         color_discrete_map=colors
     )
     fig_trend.update_layout(
         plot_bgcolor="white",
         paper_bgcolor="white",
-        font=dict(color="#333333")
+        font=dict(color="#333333"),
+        xaxis_title="Date",
+        yaxis_title="Number of Orders"
     )
     st.plotly_chart(fig_trend, use_container_width=True)
 
@@ -75,7 +82,8 @@ with right_col:
         plot_bgcolor="white",
         paper_bgcolor="white",
         font=dict(color="#333333"),
-        yaxis=dict(categoryorder="total ascending")
+        yaxis=dict(categoryorder="total ascending"),
+        xaxis_title="Number of Orders"
     )
     st.plotly_chart(fig_breakdown, use_container_width=True)
 
