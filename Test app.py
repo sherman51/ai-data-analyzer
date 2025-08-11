@@ -96,7 +96,7 @@ if uploaded_file is not None:
             today = datetime.today()
             df_filtered = df[df["ExpDate"] <= today]
 
-from datetime import datetime, timedelta
+
 
 # Assuming today is defined
 today = datetime.today()
@@ -153,6 +153,7 @@ st.markdown("---")
 
 else:
     st.info("Please upload an Excel file to get started.")
+
 
 
 
