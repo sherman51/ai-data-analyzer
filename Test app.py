@@ -19,10 +19,10 @@ def BOC():
 
     with col_trend:
         # Melting the data for trend chart
-        df_long = df_filtered.melt(id_vars=["CreatedOn"], var_name="Category", value_name="Count")
+        df_long = df_filtered.melt(id_vars=["ExpDate"], var_name="Category", value_name="Count")
         fig_trend = px.bar(
             df_long,
-            x="CreatedOn",
+            x="ExpDate",
             y="Count",
             color="Category",
             barmode="group",
@@ -33,7 +33,7 @@ def BOC():
             plot_bgcolor="white",
             paper_bgcolor="white",
             font=dict(color="#333333"),
-            xaxis_title="CreatedOn",
+            xaxis_title="ExpDate",
             yaxis_title="Count"
         )
         st.plotly_chart(fig_trend, use_container_width=True)
@@ -82,19 +82,19 @@ if uploaded_file is not None:
         df = pd.read_excel(uploaded_file, sheet_name="Orders")  # Adjust sheet name if necessary
         
         # Validate required columns
-        required_columns = ["CreatedOn", "Priority", "GINo", "StorageZone", "Status"]
+        required_columns = ["ExpDate", "Priority", "GINo", "StorageZone", "Status"]
         if not all(col in df.columns for col in required_columns):
             st.error(f"Missing required columns: {required_columns}")
         else:
             st.success("File uploaded successfully!")
 
             # ---------- DATA PROCESSING ----------
-            # Ensure 'CreatedOn' column is in datetime format
-            df["CreatedOn"] = pd.to_datetime(df["CreatedOn"], errors='coerce')
+            # Ensure 'ExpDate' column is in datetime format
+            df["ExpDate"] = pd.to_datetime(df["ExpDate"], errors='coerce')
 
             # Filter data based on today's date and selected date range
             today = datetime.today()
-            df_filtered = df[df["CreatedOn"] <= today]
+            df_filtered = df[df["ExpDate"] <= today]
 
             # ---------- TOP ROW: Order Breakdown & Summary ----------
             col_breakdown, col_summary = st.columns([2, 1])  # Breakdown wider than summary
@@ -120,7 +120,7 @@ if uploaded_file is not None:
                     selected_date = today + timedelta(days=3)
 
                 # Filter data based on the selected date
-                filtered_data = df_filtered[df_filtered['CreatedOn'].dt.date == selected_date.date()]
+                filtered_data = df_filtered[df_filtered['ExpDate'].dt.date == selected_date.date()]
 
                 # Show total count in the selected date range
                 st.metric("Total Entries in Breakdown", len(filtered_data))
@@ -155,6 +155,7 @@ if uploaded_file is not None:
 
 else:
     st.info("Please upload an Excel file to get started.")
+
 
 
 
