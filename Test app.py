@@ -35,7 +35,6 @@ colors = {
 
 # ---------- KPIs ----------
 col1, col2, col3 = st.columns(3)
-
 with col1:
     st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
 with col2:
@@ -43,13 +42,13 @@ with col2:
 with col3:
     st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
 
-# ---------- MAIN CHARTS ----------
-left_col, right_col = st.columns([2, 1])
+# ---------- FIRST ROW: Order Trend & MTD Pie ----------
+st.markdown("---")  # muted divider
+col_left, col_right = st.columns([2, 1])
 
-with left_col:
-    # Convert to long format for grouped bar chart
+# Order Trend Bar Chart
+with col_left:
     df_orders_long = df_orders.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
-    
     fig_trend = px.bar(
         df_orders_long,
         x="Date",
@@ -68,7 +67,34 @@ with left_col:
     )
     st.plotly_chart(fig_trend, use_container_width=True)
 
-with right_col:
+# Month-to-Date Pie Chart
+with col_right:
+    mtd_orders = {
+        "Orders Received": df_orders["Orders Received"].sum(),
+        "Orders Cancelled": df_orders["Orders Cancelled"].sum()
+    }
+    df_mtd = pd.DataFrame(list(mtd_orders.items()), columns=["Type", "Count"])
+    fig_mtd = px.pie(
+        df_mtd,
+        names="Type",
+        values="Count",
+        title="Month-to-Date Orders",
+        color="Type",
+        color_discrete_map=colors
+    )
+    fig_mtd.update_layout(
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(color="#333333")
+    )
+    st.plotly_chart(fig_mtd, use_container_width=True)
+
+# ---------- SECOND ROW: Order Breakdown & Summary ----------
+st.markdown("---")  # muted divider
+col_left2, col_right2 = st.columns([1, 2])
+
+# Order Breakdown Bar Chart
+with col_left2:
     fig_breakdown = px.bar(
         order_breakdown,
         x="Orders",
@@ -87,6 +113,7 @@ with right_col:
     )
     st.plotly_chart(fig_breakdown, use_container_width=True)
 
-# ---------- SUMMARY TABLE ----------
-st.subheader("Summary Data")
-st.dataframe(df_orders)
+# Summary Table
+with col_right2:
+    st.subheader("Summary Data")
+    st.dataframe(df_orders, use_container_width=True)
