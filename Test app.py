@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 
 # ---------- SAMPLE DATA ----------
@@ -22,14 +20,6 @@ order_breakdown = pd.DataFrame({
     "Orders": [120, 90, 45, 20]
 })
 
-# Month-to-date data
-total_lines = 1000
-back_orders = 1
-sla_not_met = 0
-
-back_order_pct = (back_orders / total_lines) * 100
-order_accuracy_pct = ((total_lines - sla_not_met) / total_lines) * 100
-
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Operations Dashboard", layout="wide")
 
@@ -43,11 +33,25 @@ colors = {
     "Ad-hoc Critical": "#f06292"
 }
 
-# ---------- TOP ROW: Order Breakdown & Summary ----------
-col_breakdown, col_summary = st.columns([2, 1])
+# ---------- KPIs ----------
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
+with col2:
+    st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
+with col3:
+    st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
+
+st.markdown("---")
+
+# ---------- FIRST ROW: Summary Data & Order Breakdown ----------
+col_summary, col_breakdown = st.columns([1, 2])  # Summary takes less than half space
+
+with col_summary:
+    st.subheader("Summary Data")
+    st.dataframe(df_orders, use_container_width=True)
 
 with col_breakdown:
-    st.metric("Total Orders in Breakdown", int(order_breakdown["Orders"].sum()))
     fig_breakdown = px.bar(
         order_breakdown,
         x="Orders",
@@ -66,24 +70,12 @@ with col_breakdown:
     )
     st.plotly_chart(fig_breakdown, use_container_width=True)
 
-with col_summary:
-    st.subheader("Summary Data")
-    st.dataframe(df_orders, use_container_width=True)
-
 st.markdown("---")
 
-# ---------- SECOND ROW: Order Trend (with KPIs) & MTD Donuts ----------
+# ---------- SECOND ROW: Order Trend & MTD Pie ----------
 col_trend, col_mtd = st.columns([2, 1])
 
 with col_trend:
-    # KPIs for Order Trend
-    kpi1, kpi2 = st.columns(2)
-    with kpi1:
-        st.metric("Total Orders Received", int(df_orders["Orders Received"].sum()))
-    with kpi2:
-        st.metric("Total Orders Cancelled", int(df_orders["Orders Cancelled"].sum()))
-
-    # Order Trend Chart
     df_orders_long = df_orders.melt(id_vars=["Date"], var_name="Order Type", value_name="Count")
     fig_trend = px.bar(
         df_orders_long,
@@ -104,55 +96,22 @@ with col_trend:
     st.plotly_chart(fig_trend, use_container_width=True)
 
 with col_mtd:
-    st.subheader("Month to Date")
-
-    # Create MTD donuts
-    fig_mtd = make_subplots(
-        rows=1, cols=2,
-        specs=[[{'type': 'domain'}, {'type': 'domain'}]],
-        subplot_titles=["Back Order", "Order Accuracy"]
+    mtd_orders = {
+        "Orders Received": df_orders["Orders Received"].sum(),
+        "Orders Cancelled": df_orders["Orders Cancelled"].sum()
+    }
+    df_mtd = pd.DataFrame(list(mtd_orders.items()), columns=["Type", "Count"])
+    fig_mtd = px.pie(
+        df_mtd,
+        names="Type",
+        values="Count",
+        title="Month-to-Date Orders",
+        color="Type",
+        color_discrete_map=colors
     )
-
-    # Back Order Donut
-    fig_mtd.add_trace(go.Pie(
-        labels=["Order Lines Fulfilled", "Back Orders Lines"],
-        values=[total_lines - back_orders, back_orders],
-        hole=0.7,
-        marker_colors=["#66bb6a", "#ef5350"],
-        textinfo="none",
-        showlegend=True
-    ), 1, 1)
-
-    # Order Accuracy Donut
-    fig_mtd.add_trace(go.Pie(
-        labels=["Order Lines SLA Met", "Order Lines SLA Not Met"],
-        values=[total_lines - sla_not_met, sla_not_met],
-        hole=0.7,
-        marker_colors=["#66bb6a", "#ef5350"],
-        textinfo="none",
-        showlegend=True
-    ), 1, 2)
-
-    # Annotations with consistent alignment
     fig_mtd.update_layout(
-        annotations=[
-            # Back Order
-            dict(text="<0.50%", x=0.18, y=1.15, font_size=14, font_color="green", showarrow=False),
-            dict(text=f"{back_order_pct:.2f}%", x=0.18, y=0.5, font_size=20, font_color="green", showarrow=False),
-            dict(text=str(back_orders), x=0.18, y=0.68, font_size=12, font_color="#333333", showarrow=False),
-            dict(text=str(total_lines), x=0.18, y=0.32, font_size=12, font_color="#333333", showarrow=False),
-
-            # Order Accuracy
-            dict(text=">99.50%", x=0.82, y=1.15, font_size=14, font_color="green", showarrow=False),
-            dict(text=f"{order_accuracy_pct:.2f}%", x=0.82, y=0.5, font_size=20, font_color="green", showarrow=False),
-            dict(text=str(sla_not_met), x=0.82, y=0.68, font_size=12, font_color="#333333", showarrow=False),
-            dict(text=str(total_lines), x=0.82, y=0.32, font_size=12, font_color="#333333", showarrow=False)
-        ],
         plot_bgcolor="white",
         paper_bgcolor="white",
-        font=dict(color="#333333"),
-        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center")
+        font=dict(color="#333333")
     )
-
     st.plotly_chart(fig_mtd, use_container_width=True)
-
