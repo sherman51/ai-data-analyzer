@@ -1,5 +1,4 @@
-import streamlit as stPick by Cart")
-
+import streamlit
 import pandas as pd
 from io import BytesIO
 from openpyxl.utils import get_column_letter
@@ -351,6 +350,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
