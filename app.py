@@ -129,120 +129,74 @@ def assign_job_numbers_with_scenarios(df):
     """
     Assign Job No with updated logic:
     Ensures all IssueNos in a Job No share the same DeliveryDate.
-    Scenarios for multi-line GIs:
-        1) Combine 2 Bins + 1 Layer
-        2) Only Bins: 3 to 4 GIs per Job No
-        3) Only Layers: 2 to 3 GIs per Job No
+    All lines belonging to the same GI (IssueNo) are always assigned
+    the same Job No.
     """
     df = df.copy()
 
-    # Add DeliveryDate into GI info to allow grouping
-    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate']].drop_duplicates('IssueNo')
-
-    # Separate single and multi-line GIs
-    single_line = gi_info[gi_info['Line Count'] == 1].copy()
-    multi_line = gi_info[gi_info['Line Count'] > 1].copy()
+    # Work only on unique IssueNos
+    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate']].drop_duplicates()
 
     job_no_counter = 1
-    single_line['Job No'] = None
+    gi_info['Job No'] = None
 
-    # --- SINGLE-LINE GIs: Group by ShipToName + DeliveryDate ---
+    # --- SINGLE-LINE GIs ---
+    single_line = gi_info[gi_info['Line Count'] == 1].copy()
     for (shipto, delivery_date), group in single_line.groupby(['ShipToName', 'DeliveryDate']):
         issues = group['IssueNo'].tolist()
         chunks = [issues[i:i+5] for i in range(0, len(issues), 5)]
         for chunk in chunks:
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            single_line.loc[single_line['IssueNo'].isin(chunk), 'Job No'] = job_no_str
+            gi_info.loc[gi_info['IssueNo'].isin(chunk), 'Job No'] = job_no_str
             job_no_counter += 1
 
-    # Combine small jobs with <= 2 GIs into new groups (still by DeliveryDate)
-    job_counts = single_line.groupby('Job No').size()
-    small_jobs = job_counts[job_counts <= 2].index.tolist()
-
-    if len(small_jobs) > 1:
-        combined_issues = single_line[single_line['Job No'].isin(small_jobs)][['IssueNo', 'DeliveryDate']]
-        for delivery_date, group in combined_issues.groupby('DeliveryDate'):
-            issues = group['IssueNo'].tolist()
-            chunks = [issues[i:i+5] for i in range(0, len(issues), 5)]
-            for chunk in chunks:
-                job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-                single_line.loc[single_line['IssueNo'].isin(chunk), 'Job No'] = job_no_str
-                job_no_counter += 1
-
-    # --- MULTI-LINE GIs: Group by DeliveryDate ---
-    multi_line['Job No'] = None
-
-    # List to keep track of Issues that cannot be grouped
-    excluded_issues = []
-
+    # --- MULTI-LINE GIs ---
+    multi_line = gi_info[gi_info['Line Count'] > 1].copy()
     for delivery_date, group in multi_line.groupby('DeliveryDate'):
         bins = group[group['GI Class'] == 'Bin']['IssueNo'].tolist()
         layers = group[group['GI Class'] == 'Layer']['IssueNo'].tolist()
-        assigned_issues = set()
 
         # Scenario 1: 2 Bins + 1 Layer
         while len(bins) >= 2 and len(layers) >= 1:
-            selected_bins = bins[:2]
-            selected_layer = layers[0]
-            job_issues = selected_bins + [selected_layer]
+            job_issues = bins[:2] + [layers[0]]
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            multi_line.loc[multi_line['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
+            gi_info.loc[gi_info['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
             job_no_counter += 1
-            assigned_issues.update(job_issues)
             bins = bins[2:]
             layers = layers[1:]
 
-        # Scenario 2: Only Bins (group in 3 to 4)
+        # Scenario 2: Only Bins (3–4 per job)
         while len(bins) >= 3:
             group_size = 4 if len(bins) >= 4 else 3
             job_issues = bins[:group_size]
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            multi_line.loc[multi_line['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
+            gi_info.loc[gi_info['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
             job_no_counter += 1
-            assigned_issues.update(job_issues)
             bins = bins[group_size:]
 
-        # Scenario 3: Only Layers (group in 2 to 3)
+        # Scenario 3: Only Layers (2–3 per job)
         while len(layers) >= 2:
             group_size = 3 if len(layers) >= 3 else 2
             job_issues = layers[:group_size]
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            multi_line.loc[multi_line['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
+            gi_info.loc[gi_info['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
             job_no_counter += 1
-            assigned_issues.update(job_issues)
             layers = layers[group_size:]
 
-        # Remaining Bins or Layers
-        for bin_issue in bins:
-            if bin_issue not in assigned_issues:
-                job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-                multi_line.loc[multi_line['IssueNo'] == bin_issue, 'Job No'] = job_no_str
-                job_no_counter += 1
+        # Remaining single bins/layers
+        for issue in bins + layers:
+            job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+            gi_info.loc[gi_info['IssueNo'] == issue, 'Job No'] = job_no_str
+            job_no_counter += 1
 
-        for layer_issue in layers:
-            if layer_issue not in assigned_issues:
-                job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-                multi_line.loc[multi_line['IssueNo'] == layer_issue, 'Job No'] = job_no_str
-                job_no_counter += 1
+    # --- Merge Job No back to full df (ensures ALL lines of same IssueNo get same job) ---
+    df = df.merge(gi_info[['IssueNo', 'Job No']], on='IssueNo', how='left')
 
-        # Add remaining ungrouped bins or layers to the exclusion list
-        excluded_issues += bins + layers
-
-    # Remove the excluded GIs from the main dataframe
-    df = df[~df['IssueNo'].isin(excluded_issues)]
-
-    # Merge back assigned job numbers to main dataframe
-    job_no_map = pd.concat([
-        single_line[['IssueNo', 'Job No']],
-        multi_line[['IssueNo', 'Job No']]
-    ])
-    df = df.merge(job_no_map.drop_duplicates('IssueNo'), on='IssueNo', how='left')
-
-    # Optional sanity check (warn if any Job No has mixed delivery dates)
-    delivery_date_check = df.groupby('Job No')['DeliveryDate'].nunique()
-    bad_jobs = delivery_date_check[delivery_date_check > 1]
-    if not bad_jobs.empty:
-        st.warning(f"⚠️ The following Job Nos have mixed delivery dates: {', '.join(bad_jobs.index)}")
+    # Sanity check: ensure no GI split into multiple jobs
+    check = df.groupby('IssueNo')['Job No'].nunique()
+    bad_gis = check[check > 1]
+    if not bad_gis.empty:
+        st.error(f"❌ These IssueNos were split across multiple jobs: {', '.join(map(str, bad_gis.index))}")
 
     return df
 
@@ -350,6 +304,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
