@@ -69,14 +69,23 @@ def load_data(picking_pool_file, sku_master_file):
     return picking_pool, sku_master
 
 def filter_picking_pool(df):
+    # Normalize LocationType column
     df['LocationType'] = df['LocationType'].astype(str).str.strip().str.lower()
-    grnos_with_storage = df[df['LocationType'] == 'storage']['IssueNo'].unique()
-    df = df[~df['IssueNo'].isin(grnos_with_storage)]
+
+    # --- Identify IssueNos that have any 'storage' line ---
+    storage_gis = df[df['LocationType'] == 'storage']['IssueNo'].unique()
+
+    # --- Remove entire GI if it contains storage lines ---
+    df = df[~df['IssueNo'].isin(storage_gis)]
+
+    # --- Keep only Zone A and valid locations ---
     df = df[(df['Zone'] == 'A') & (
         df['Location'].astype(str).str.startswith('A-') |
         df['Location'].astype(str).str.startswith('SOFT-')
     )]
+
     return df
+
 
 def apply_delivery_date_filter(df, delivery_range):
     if isinstance(delivery_range, tuple) and len(delivery_range) == 2:
@@ -304,6 +313,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
