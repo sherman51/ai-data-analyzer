@@ -1,16 +1,3 @@
-Your code is quite organized, but I see some areas where we can make it more compact, readable, and efficient. Here's a tidied-up version with some optimizations, better structure, and comments:
-
-### Changes:
-
-1. **Imports**: Cleaned up the imports, grouping standard libraries and third-party libraries together for clarity.
-2. **Helper Functions**: Reorganized function definitions to reduce redundancy.
-3. **General Formatting**: Cleaned up spaces, indentation, and comments to make it easier to follow.
-4. **Error Handling**: Added some consistency in error messaging.
-5. **Function Structure**: Reduced repetitive lines (like `fillna(0)` and `replace(0, 1)`).
-
-Here’s the revised version:
-
-```python
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -271,3 +258,4 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
