@@ -1,4 +1,5 @@
-import streamlit as st
+import streamlit as stPick by Cart")
+
 import pandas as pd
 from io import BytesIO
 from openpyxl.utils import get_column_letter
@@ -9,8 +10,7 @@ from zoneinfo import ZoneInfo
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
-st.title("📦 Master Pick Ticket Generator – Pick by Cart")
-
+st.title("📦 Master Pick Ticket Generator – 
 # ------------------------ FILE UPLOADS ------------------------
 st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
@@ -173,6 +173,9 @@ def assign_job_numbers_with_scenarios(df):
     # --- MULTI-LINE GIs: Group by DeliveryDate ---
     multi_line['Job No'] = None
 
+    # List to keep track of Issues that cannot be grouped
+    excluded_issues = []
+
     for delivery_date, group in multi_line.groupby('DeliveryDate'):
         bins = group[group['GI Class'] == 'Bin']['IssueNo'].tolist()
         layers = group[group['GI Class'] == 'Layer']['IssueNo'].tolist()
@@ -222,6 +225,12 @@ def assign_job_numbers_with_scenarios(df):
                 job_no_str = f"Job{str(job_no_counter).zfill(3)}"
                 multi_line.loc[multi_line['IssueNo'] == layer_issue, 'Job No'] = job_no_str
                 job_no_counter += 1
+
+        # Add remaining ungrouped bins or layers to the exclusion list
+        excluded_issues += bins + layers
+
+    # Remove the excluded GIs from the main dataframe
+    df = df[~df['IssueNo'].isin(excluded_issues)]
 
     # Merge back assigned job numbers to main dataframe
     job_no_map = pd.concat([
@@ -342,6 +351,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
