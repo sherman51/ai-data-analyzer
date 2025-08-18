@@ -7,6 +7,34 @@ from itertools import cycle
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import re
+
+def map_location_to_zone(location: str) -> str:
+    if not isinstance(location, str):
+        return "Unknown"
+    location = location.strip().upper()
+
+    # Extract the first number after 'A-'
+    match = re.match(r"A-(\d{2})", location)
+    if match:
+        num = int(match.group(1))  # e.g. "13" -> 13
+        if 1 <= num <= 5:
+            return "Zone 1"
+        elif 6 <= num <= 10:
+            return "Zone 2"
+        elif 11 <= num <= 15:
+            return "Zone 3"
+        elif 16 <= num <= 20:
+            return "Zone 4"
+        else:
+            return "Other A Zone"
+
+    if location.startswith("SOFT-"):
+        return "Soft Zone"
+
+    return "Unknown"
+
+
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
 st.title("📦 Master Pick Ticket Generator – ")
@@ -137,23 +165,24 @@ def classify_and_assign(df):
 def assign_job_numbers_with_scenarios(df):
     """
     Assign Job No with updated logic:
-    Ensures all IssueNos in a Job No share the same DeliveryDate.
-    All lines belonging to the same GI (IssueNo) are always assigned
-    the same Job No.
+    - All lines of the same IssueNo (GI) always go into the same Job No
+    - Single-line GIs grouped by ZoneMapped + DeliveryDate, max 4 GIs per job
+    - Multi-line GIs use scenarios (2 bins + 1 layer, etc.)
     """
     df = df.copy()
 
     # Work only on unique IssueNos
-    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate']].drop_duplicates()
+    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate', 'ZoneMapped']].drop_duplicates()
 
     job_no_counter = 1
     gi_info['Job No'] = None
 
-    # --- SINGLE-LINE GIs ---
+    # --- SINGLE-LINE GIs: Group by ZoneMapped + DeliveryDate ---
     single_line = gi_info[gi_info['Line Count'] == 1].copy()
-    for (shipto, delivery_date), group in single_line.groupby(['ShipToName', 'DeliveryDate']):
+    for (zone, delivery_date), group in single_line.groupby(['ZoneMapped', 'DeliveryDate']):
         issues = group['IssueNo'].tolist()
-        chunks = [issues[i:i+5] for i in range(0, len(issues), 5)]
+        # Split into chunks of max 4
+        chunks = [issues[i:i+4] for i in range(0, len(issues), 4)]
         for chunk in chunks:
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
             gi_info.loc[gi_info['IssueNo'].isin(chunk), 'Job No'] = job_no_str
@@ -192,13 +221,13 @@ def assign_job_numbers_with_scenarios(df):
             job_no_counter += 1
             layers = layers[group_size:]
 
-        # Remaining single bins/layers
+        # Remaining singles
         for issue in bins + layers:
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
             gi_info.loc[gi_info['IssueNo'] == issue, 'Job No'] = job_no_str
             job_no_counter += 1
 
-    # --- Merge Job No back to full df (ensures ALL lines of same IssueNo get same job) ---
+    # --- Merge Job No back to full df ---
     df = df.merge(gi_info[['IssueNo', 'Job No']], on='IssueNo', how='left')
 
     # Sanity check: ensure no GI split into multiple jobs
@@ -208,6 +237,7 @@ def assign_job_numbers_with_scenarios(df):
         st.error(f"❌ These IssueNos were split across multiple jobs: {', '.join(map(str, bad_gis.index))}")
 
     return df
+
 
 
 
@@ -313,6 +343,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
