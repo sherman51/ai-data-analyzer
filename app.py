@@ -194,7 +194,11 @@ def assign_job_numbers_with_scenarios(df):
     single_line = gi_info[gi_info['Line Count'] == 1].copy()
     for (zone, delivery_date), group in single_line.groupby(['Zone', 'DeliveryDate']):
         issues = group['IssueNo'].tolist()
- 
+        chunks = [issues[i:i+4] for i in range(0, len(issues), 4)]  # max 4 per job
+        for chunk in chunks:
+            job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+            gi_info.loc[gi_info['IssueNo'].isin(chunk), 'Job No'] = job_no_str
+            job_no_counter += 1
 
     # --- MULTI-LINE GIs ---
     multi_line = gi_info[gi_info['Line Count'] > 1].copy()
@@ -345,6 +349,4 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
-
 
