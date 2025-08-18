@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 from io import BytesIO
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
@@ -10,6 +11,7 @@ from zoneinfo import ZoneInfo
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
 st.title("📦 Master Pick Ticket Generator – ")
+
 # ------------------------ FILE UPLOADS ------------------------
 st.sidebar.header("📂 Upload Input Files")
 picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", type=["xlsx"])
@@ -21,13 +23,10 @@ def map_location_to_zone(location: str) -> str:
     """
     Map warehouse locations into Zones based on the first 2-digit section after 'A-'.
     Example:
-      A-01-xx-xx-xx -> Zone 1
-      A-02-xx-xx-xx -> Zone 1
-      ...
-      A-05-xx-xx-xx -> Zone 1
-      A-06 ~ A-10   -> Zone 2
-      A-11 ~ A-15   -> Zone 3
-      A-16 ~ A-20   -> Zone 4
+      A-01 to A-05 -> Zone 1
+      A-06 to A-10 -> Zone 2
+      A-11 to A-15 -> Zone 3
+      A-16 to A-20 -> Zone 4
     """
     if not isinstance(location, str):
         return "Unknown"
@@ -37,7 +36,7 @@ def map_location_to_zone(location: str) -> str:
     # Extract the first number after 'A-'
     match = re.match(r"A-(\d{2})", location)
     if match:
-        num = int(match.group(1))  # e.g. "13" -> 13
+        num = int(match.group(1))
         if 1 <= num <= 5:
             return "Zone 1"
         elif 6 <= num <= 10:
@@ -53,7 +52,6 @@ def map_location_to_zone(location: str) -> str:
         return "Soft"
 
     return "Unknown"
-    df['ZoneMapped'] = df['Location_x'].apply(map_location_to_zone)
 
 
 def calculate_carton_info(row):
@@ -87,6 +85,7 @@ def calculate_carton_info(row):
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
+
 def classify_gi(volume):
     if pd.isna(volume):
         return 'Unknown'
@@ -96,6 +95,7 @@ def classify_gi(volume):
         return 'Layer'
     else:
         return 'Pick by Orders'
+
 
 def load_data(picking_pool_file, sku_master_file):
     picking_pool = pd.read_excel(picking_pool_file)
@@ -107,6 +107,7 @@ def load_data(picking_pool_file, sku_master_file):
 
     return picking_pool, sku_master
 
+
 def filter_picking_pool(df):
     # Normalize LocationType column
     df['LocationType'] = df['LocationType'].astype(str).str.strip().str.lower()
@@ -117,11 +118,8 @@ def filter_picking_pool(df):
     # --- Remove entire GI if it contains storage lines ---
     df = df[~df['IssueNo'].isin(storage_gis)]
 
-    # --- Keep only Zone A and valid locations ---
-    df = df[(df['Zone'] == 'A') & (
-        df['Location'].astype(str).str.startswith('A-') |
-        df['Location'].astype(str).str.startswith('SOFT-')
-    )]
+    # Add ZoneMapped column
+    df['ZoneMapped'] = df['Location'].apply(map_location_to_zone)
 
     return df
 
@@ -131,6 +129,7 @@ def apply_delivery_date_filter(df, delivery_range):
         start, end = pd.to_datetime(delivery_range[0]), pd.to_datetime(delivery_range[1])
         return df[(df['DeliveryDate'] >= start) & (df['DeliveryDate'] <= end)]
     return df
+
 
 def merge_and_clean(df, sku_master):
     merged_check = df.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
@@ -149,11 +148,13 @@ def merge_and_clean(df, sku_master):
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
     return df
 
+
 def add_line_count(df):
     line_counts = df.groupby('IssueNo').size()
     df = df.copy()
     df['Line Count'] = df['IssueNo'].map(line_counts)
     return df
+
 
 def classify_and_assign(df):
     df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
@@ -172,6 +173,7 @@ def classify_and_assign(df):
     df['Type'] = df.apply(lambda row: row['BinNo'] if row['GI Class'] == 'Bin' else row['LayerNo'], axis=1)
 
     return df
+
 
 def assign_job_numbers_with_scenarios(df):
     """
@@ -192,8 +194,7 @@ def assign_job_numbers_with_scenarios(df):
     single_line = gi_info[gi_info['Line Count'] == 1].copy()
     for (zone, delivery_date), group in single_line.groupby(['ZoneMapped', 'DeliveryDate']):
         issues = group['IssueNo'].tolist()
-        # Split into chunks of max 4
-        chunks = [issues[i:i+4] for i in range(0, len(issues), 4)]
+        chunks = [issues[i:i+4] for i in range(0, len(issues), 4)]  # max 4 per job
         for chunk in chunks:
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
             gi_info.loc[gi_info['IssueNo'].isin(chunk), 'Job No'] = job_no_str
@@ -250,8 +251,6 @@ def assign_job_numbers_with_scenarios(df):
     return df
 
 
-
-
 def finalize_output(df, gi_type):
     if gi_type == "Single-line":
         df = df[df['Line Count'] == 1]
@@ -265,8 +264,9 @@ def finalize_output(df, gi_type):
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
         'Commercial Box Count', 'Delivery Date', 'ShipToName',
-        'Type', 'Job No', 'CartonDescription','ZoneMapped'
+        'Type', 'Job No', 'CartonDescription', 'ZoneMapped'
     ]].drop_duplicates()
+
 
 def export_to_excel(output_df):
     output = BytesIO()
@@ -301,7 +301,6 @@ def export_to_excel(output_df):
 
     return output
 
-
 # ------------------------ MAIN LOGIC ------------------------
 
 def main():
@@ -329,14 +328,10 @@ def main():
 
         output = export_to_excel(output_df)
 
-        # Replace with your timezone if needed
         now = datetime.now(ZoneInfo("Asia/Singapore"))
-        
-        # Format as: 05 Aug - 1452
         timestamp = now.strftime("%d %b - %H%M")
-        
         filename = f"master_pick_ticket_{timestamp}.xlsx"
-        
+
         st.download_button(
             label="Download Master Pick Ticket",
             data=output,
@@ -354,16 +349,3 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
-
-
-
-
-
-
-
-
-
-
-
-
