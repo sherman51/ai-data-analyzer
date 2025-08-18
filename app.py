@@ -50,7 +50,7 @@ def map_location_to_zone(location: str) -> str:
             return "Other A Zone"
 
     if location.startswith("SOFT-"):
-        return "Soft Zone"
+        return "Soft"
 
     return "Unknown"
 
@@ -263,7 +263,7 @@ def finalize_output(df, gi_type):
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
         'Commercial Box Count', 'Delivery Date', 'ShipToName',
-        'Type', 'Job No', 'CartonDescription'
+        'Type', 'Job No', 'CartonDescription','ZoneMapped'
     ]].drop_duplicates()
 
 def export_to_excel(output_df):
@@ -352,6 +352,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
