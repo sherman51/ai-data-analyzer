@@ -7,34 +7,6 @@ from itertools import cycle
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import re
-
-def map_location_to_zone(location: str) -> str:
-    if not isinstance(location, str):
-        return "Unknown"
-    location = location.strip().upper()
-
-    # Extract the first number after 'A-'
-    match = re.match(r"A-(\d{2})", location)
-    if match:
-        num = int(match.group(1))  # e.g. "13" -> 13
-        if 1 <= num <= 5:
-            return "Zone 1"
-        elif 6 <= num <= 10:
-            return "Zone 2"
-        elif 11 <= num <= 15:
-            return "Zone 3"
-        elif 16 <= num <= 20:
-            return "Zone 4"
-        else:
-            return "Other A Zone"
-
-    if location.startswith("SOFT-"):
-        return "Soft Zone"
-
-    return "Unknown"
-
-
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
 st.title("📦 Master Pick Ticket Generator – ")
@@ -343,8 +315,6 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
-
-
 
 
 
