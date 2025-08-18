@@ -53,6 +53,8 @@ def map_location_to_zone(location: str) -> str:
         return "Soft"
 
     return "Unknown"
+    df['ZoneMapped'] = df['Location'].apply(map_location_to_zone)
+
 
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
@@ -352,6 +354,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
