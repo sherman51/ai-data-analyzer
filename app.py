@@ -118,8 +118,8 @@ def filter_picking_pool(df):
     # --- Remove entire GI if it contains storage lines ---
     df = df[~df['IssueNo'].isin(storage_gis)]
 
-    # Add ZoneMapped column
-    df['ZoneMapped'] = df['Location'].apply(map_location_to_zone)
+    # Add Zone column
+    df['Zone'] = df['Location'].apply(map_location_to_zone)
 
     return df
 
@@ -179,20 +179,20 @@ def assign_job_numbers_with_scenarios(df):
     """
     Assign Job No with updated logic:
     - All lines of the same IssueNo (GI) always go into the same Job No
-    - Single-line GIs grouped by ZoneMapped + DeliveryDate, max 4 GIs per job
+    - Single-line GIs grouped by Zone + DeliveryDate, max 4 GIs per job
     - Multi-line GIs use scenarios (2 bins + 1 layer, etc.)
     """
     df = df.copy()
 
     # Work only on unique IssueNos
-    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate', 'ZoneMapped']].drop_duplicates()
+    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate', 'Zone']].drop_duplicates()
 
     job_no_counter = 1
     gi_info['Job No'] = None
 
-    # --- SINGLE-LINE GIs: Group by ZoneMapped + DeliveryDate ---
+    # --- SINGLE-LINE GIs: Group by Zone + DeliveryDate ---
     single_line = gi_info[gi_info['Line Count'] == 1].copy()
-    for (zone, delivery_date), group in single_line.groupby(['ZoneMapped', 'DeliveryDate']):
+    for (zone, delivery_date), group in single_line.groupby(['Zone', 'DeliveryDate']):
         issues = group['IssueNo'].tolist()
         chunks = [issues[i:i+4] for i in range(0, len(issues), 4)]  # max 4 per job
         for chunk in chunks:
@@ -264,7 +264,7 @@ def finalize_output(df, gi_type):
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
         'Commercial Box Count', 'Delivery Date', 'ShipToName',
-        'Type', 'Job No', 'CartonDescription', 'ZoneMapped'
+        'Type', 'Job No', 'CartonDescription', 'Zone'
     ]].drop_duplicates()
 
 
@@ -349,3 +349,4 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
