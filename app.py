@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
-st.title("📦 Master Pick Ticket Generator – ")
+st.title("📦 Master Pick Ticket Generator")
 
 # ------------------------ FILE UPLOADS ------------------------
 st.sidebar.header("📂 Upload Input Files")
@@ -349,4 +349,5 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
