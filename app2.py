@@ -13,7 +13,7 @@ if st.button("Calculate BMI"):
     bmi = weight / (height_m ** 2)
     
     # Display BMI
-    st.write(f"Your BMI is: **{bmi:.2f}**")
+    st.write(f"Your BMI is: {bmi:.2f}")
 
     # Interpretation
     if bmi < 18.5:
@@ -24,3 +24,4 @@ if st.button("Calculate BMI"):
         st.info("You are overweight.")
     else:
         st.error("You are obese.")
+
