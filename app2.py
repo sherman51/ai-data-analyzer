@@ -8,7 +8,8 @@ weight = st.sidebar.number_input("Weight (in kg)", min_value = 10.0, max_value =
 
 
 # Calculate BMI
-if st.button("Calculate BMI")
+if st.sidebar.button("Calculate BMI")
 bmi = weight/(height**2)
 
 st.write("Your BMI is:**bmi"
+
