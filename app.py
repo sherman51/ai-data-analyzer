@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import re
 from io import BytesIO
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
@@ -10,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 # ------------------------ UI CONFIGURATION ------------------------
 st.set_page_config(page_title="Master Pick Ticket Generator", layout="wide")
-st.title("📦 Master Pick Ticket Generator")
+st.title("📦 Master Pick Ticket Generator – Pick by Cart")
 
 # ------------------------ FILE UPLOADS ------------------------
 st.sidebar.header("📂 Upload Input Files")
@@ -18,41 +17,6 @@ picking_pool_file = st.sidebar.file_uploader("Upload Picking Pool Excel file", t
 sku_master_file = st.sidebar.file_uploader("Upload SKU Master Excel file", type=["xlsx"])
 
 # ------------------------ HELPER FUNCTIONS ------------------------
-
-def map_location_to_zone(location: str) -> str:
-    """
-    Map warehouse locations into Zones based on the first 2-digit section after 'A-'.
-    Example:
-      A-01 to A-05 -> Zone 1
-      A-06 to A-10 -> Zone 2
-      A-11 to A-15 -> Zone 3
-      A-16 to A-20 -> Zone 4
-    """
-    if not isinstance(location, str):
-        return "Unknown"
-
-    location = location.strip().upper()
-
-    # Extract the first number after 'A-'
-    match = re.match(r"A-(\d{2})", location)
-    if match:
-        num = int(match.group(1))
-        if 1 <= num <= 5:
-            return "Zone 1"
-        elif 6 <= num <= 10:
-            return "Zone 2"
-        elif 11 <= num <= 15:
-            return "Zone 3"
-        elif 16 <= num <= 20:
-            return "Zone 4"
-        else:
-            return "Other A Zone"
-
-    if location.startswith("SOFT-"):
-        return "Soft"
-
-    return "Unknown"
-
 
 def calculate_carton_info(row):
     pq = row.get('PickingQty', 0) or 0
@@ -85,7 +49,6 @@ def calculate_carton_info(row):
 
     return pd.Series({'CartonCount': totalC, 'CartonDescription': desc})
 
-
 def classify_gi(volume):
     if pd.isna(volume):
         return 'Unknown'
@@ -95,7 +58,6 @@ def classify_gi(volume):
         return 'Layer'
     else:
         return 'Pick by Orders'
-
 
 def load_data(picking_pool_file, sku_master_file):
     picking_pool = pd.read_excel(picking_pool_file)
@@ -107,29 +69,21 @@ def load_data(picking_pool_file, sku_master_file):
 
     return picking_pool, sku_master
 
-
 def filter_picking_pool(df):
-    # Normalize LocationType column
     df['LocationType'] = df['LocationType'].astype(str).str.strip().str.lower()
-
-    # --- Identify IssueNos that have any 'storage' line ---
-    storage_gis = df[df['LocationType'] == 'storage']['IssueNo'].unique()
-
-    # --- Remove entire GI if it contains storage lines ---
-    df = df[~df['IssueNo'].isin(storage_gis)]
-
-    # Add Zone column
-    df['Zone'] = df['Location'].apply(map_location_to_zone)
-
+    grnos_with_storage = df[df['LocationType'] == 'storage']['IssueNo'].unique()
+    df = df[~df['IssueNo'].isin(grnos_with_storage)]
+    df = df[(df['Zone'] == 'A') & (
+        df['Location'].astype(str).str.startswith('A-') |
+        df['Location'].astype(str).str.startswith('SOFT-')
+    )]
     return df
-
 
 def apply_delivery_date_filter(df, delivery_range):
     if isinstance(delivery_range, tuple) and len(delivery_range) == 2:
         start, end = pd.to_datetime(delivery_range[0]), pd.to_datetime(delivery_range[1])
         return df[(df['DeliveryDate'] >= start) & (df['DeliveryDate'] <= end)]
     return df
-
 
 def merge_and_clean(df, sku_master):
     merged_check = df.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
@@ -148,13 +102,11 @@ def merge_and_clean(df, sku_master):
     df['Total Item Vol'] = (df['PickingQty'] / df['Qty Commercial Box']) * df['Item Vol']
     return df
 
-
 def add_line_count(df):
     line_counts = df.groupby('IssueNo').size()
     df = df.copy()
     df['Line Count'] = df['IssueNo'].map(line_counts)
     return df
-
 
 def classify_and_assign(df):
     df = df.merge(df.groupby('IssueNo')['Total Item Vol'].sum().rename('Total GI Vol'), on='IssueNo')
@@ -174,81 +126,118 @@ def classify_and_assign(df):
 
     return df
 
-
 def assign_job_numbers_with_scenarios(df):
     """
     Assign Job No with updated logic:
-    - All lines of the same IssueNo (GI) always go into the same Job No
-    - Single-line GIs grouped by Zone + DeliveryDate, max 4 GIs per job
-    - Multi-line GIs use scenarios (2 bins + 1 layer, etc.)
+    Ensures all IssueNos in a Job No share the same DeliveryDate.
+    Scenarios for multi-line GIs:
+        1) Combine 2 Bins + 1 Layer
+        2) Only Bins: 3 to 4 GIs per Job No
+        3) Only Layers: 2 to 3 GIs per Job No
     """
     df = df.copy()
 
-    # Work only on unique IssueNos
-    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate', 'Zone']].drop_duplicates()
+    # Add DeliveryDate into GI info to allow grouping
+    gi_info = df[['IssueNo', 'ShipToName', 'Line Count', 'GI Class', 'DeliveryDate']].drop_duplicates('IssueNo')
+
+    # Separate single and multi-line GIs
+    single_line = gi_info[gi_info['Line Count'] == 1].copy()
+    multi_line = gi_info[gi_info['Line Count'] > 1].copy()
 
     job_no_counter = 1
-    gi_info['Job No'] = None
+    single_line['Job No'] = None
 
-    # --- SINGLE-LINE GIs: Group by Zone + DeliveryDate ---
-    single_line = gi_info[gi_info['Line Count'] == 1].copy()
-    for (zone, delivery_date), group in single_line.groupby(['Zone', 'DeliveryDate']):
+    # --- SINGLE-LINE GIs: Group by ShipToName + DeliveryDate ---
+    for (shipto, delivery_date), group in single_line.groupby(['ShipToName', 'DeliveryDate']):
         issues = group['IssueNo'].tolist()
-        chunks = [issues[i:i+4] for i in range(0, len(issues), 4)]  # max 4 per job
+        chunks = [issues[i:i+5] for i in range(0, len(issues), 5)]
         for chunk in chunks:
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            gi_info.loc[gi_info['IssueNo'].isin(chunk), 'Job No'] = job_no_str
+            single_line.loc[single_line['IssueNo'].isin(chunk), 'Job No'] = job_no_str
             job_no_counter += 1
 
-    # --- MULTI-LINE GIs ---
-    multi_line = gi_info[gi_info['Line Count'] > 1].copy()
+    # Combine small jobs with <= 2 GIs into new groups (still by DeliveryDate)
+    job_counts = single_line.groupby('Job No').size()
+    small_jobs = job_counts[job_counts <= 2].index.tolist()
+
+    if len(small_jobs) > 1:
+        combined_issues = single_line[single_line['Job No'].isin(small_jobs)][['IssueNo', 'DeliveryDate']]
+        for delivery_date, group in combined_issues.groupby('DeliveryDate'):
+            issues = group['IssueNo'].tolist()
+            chunks = [issues[i:i+5] for i in range(0, len(issues), 5)]
+            for chunk in chunks:
+                job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+                single_line.loc[single_line['IssueNo'].isin(chunk), 'Job No'] = job_no_str
+                job_no_counter += 1
+
+    # --- MULTI-LINE GIs: Group by DeliveryDate ---
+    multi_line['Job No'] = None
+
     for delivery_date, group in multi_line.groupby('DeliveryDate'):
         bins = group[group['GI Class'] == 'Bin']['IssueNo'].tolist()
         layers = group[group['GI Class'] == 'Layer']['IssueNo'].tolist()
+        assigned_issues = set()
 
         # Scenario 1: 2 Bins + 1 Layer
         while len(bins) >= 2 and len(layers) >= 1:
-            job_issues = bins[:2] + [layers[0]]
+            selected_bins = bins[:2]
+            selected_layer = layers[0]
+            job_issues = selected_bins + [selected_layer]
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            gi_info.loc[gi_info['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
+            multi_line.loc[multi_line['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
             job_no_counter += 1
+            assigned_issues.update(job_issues)
             bins = bins[2:]
             layers = layers[1:]
 
-        # Scenario 2: Only Bins (3–4 per job)
+        # Scenario 2: Only Bins (group in 3 to 4)
         while len(bins) >= 3:
             group_size = 4 if len(bins) >= 4 else 3
             job_issues = bins[:group_size]
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            gi_info.loc[gi_info['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
+            multi_line.loc[multi_line['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
             job_no_counter += 1
+            assigned_issues.update(job_issues)
             bins = bins[group_size:]
 
-        # Scenario 3: Only Layers (2–3 per job)
+        # Scenario 3: Only Layers (group in 2 to 3)
         while len(layers) >= 2:
             group_size = 3 if len(layers) >= 3 else 2
             job_issues = layers[:group_size]
             job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            gi_info.loc[gi_info['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
+            multi_line.loc[multi_line['IssueNo'].isin(job_issues), 'Job No'] = job_no_str
             job_no_counter += 1
+            assigned_issues.update(job_issues)
             layers = layers[group_size:]
 
-        # Remaining singles
-        for issue in bins + layers:
-            job_no_str = f"Job{str(job_no_counter).zfill(3)}"
-            gi_info.loc[gi_info['IssueNo'] == issue, 'Job No'] = job_no_str
-            job_no_counter += 1
+        # Remaining Bins or Layers
+        for bin_issue in bins:
+            if bin_issue not in assigned_issues:
+                job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+                multi_line.loc[multi_line['IssueNo'] == bin_issue, 'Job No'] = job_no_str
+                job_no_counter += 1
 
-    # --- Merge Job No back to full df ---
-    df = df.merge(gi_info[['IssueNo', 'Job No']], on='IssueNo', how='left')
+        for layer_issue in layers:
+            if layer_issue not in assigned_issues:
+                job_no_str = f"Job{str(job_no_counter).zfill(3)}"
+                multi_line.loc[multi_line['IssueNo'] == layer_issue, 'Job No'] = job_no_str
+                job_no_counter += 1
 
-    # Sanity check: ensure no GI split into multiple jobs
-    check = df.groupby('IssueNo')['Job No'].nunique()
-    bad_gis = check[check > 1]
-    if not bad_gis.empty:
-        st.error(f"❌ These IssueNos were split across multiple jobs: {', '.join(map(str, bad_gis.index))}")
+    # Merge back assigned job numbers to main dataframe
+    job_no_map = pd.concat([
+        single_line[['IssueNo', 'Job No']],
+        multi_line[['IssueNo', 'Job No']]
+    ])
+    df = df.merge(job_no_map.drop_duplicates('IssueNo'), on='IssueNo', how='left')
+
+    # Optional sanity check (warn if any Job No has mixed delivery dates)
+    delivery_date_check = df.groupby('Job No')['DeliveryDate'].nunique()
+    bad_jobs = delivery_date_check[delivery_date_check > 1]
+    if not bad_jobs.empty:
+        st.warning(f"⚠️ The following Job Nos have mixed delivery dates: {', '.join(bad_jobs.index)}")
 
     return df
+
 
 
 def finalize_output(df, gi_type):
@@ -264,9 +253,8 @@ def finalize_output(df, gi_type):
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
         'Commercial Box Count', 'Delivery Date', 'ShipToName',
-        'Type', 'Job No', 'CartonDescription', 'Zone'
+        'Type', 'Job No', 'CartonDescription'
     ]].drop_duplicates()
-
 
 def export_to_excel(output_df):
     output = BytesIO()
@@ -301,6 +289,7 @@ def export_to_excel(output_df):
 
     return output
 
+
 # ------------------------ MAIN LOGIC ------------------------
 
 def main():
@@ -328,10 +317,14 @@ def main():
 
         output = export_to_excel(output_df)
 
+        # Replace with your timezone if needed
         now = datetime.now(ZoneInfo("Asia/Singapore"))
+        
+        # Format as: 05 Aug - 1452
         timestamp = now.strftime("%d %b - %H%M")
+        
         filename = f"master_pick_ticket_{timestamp}.xlsx"
-
+        
         st.download_button(
             label="Download Master Pick Ticket",
             data=output,
@@ -349,4 +342,14 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
+
+
+
+
+
+
+
+
+
 
