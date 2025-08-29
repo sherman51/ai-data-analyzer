@@ -70,14 +70,30 @@ def load_data(picking_pool_file, sku_master_file):
     return picking_pool, sku_master
 
 def filter_picking_pool(df):
+    # Normalize LocationType
     df['LocationType'] = df['LocationType'].astype(str).str.strip().str.lower()
+
+    # Remove IssueNos that contain any 'storage' location type
     grnos_with_storage = df[df['LocationType'] == 'storage']['IssueNo'].unique()
     df = df[~df['IssueNo'].isin(grnos_with_storage)]
-    df = df[(df['Zone'] == 'A') & (
-        df['Location'].astype(str).str.startswith('A-') |
-        df['Location'].astype(str).str.startswith('SOFT-')
-    )]
+
+    # Filter Zone A and Location starting with 'A-' or 'SOFT-'
+    df = df[
+        (df['Zone'] == 'A') &
+        (
+            df['Location'].astype(str).str.startswith('A-') |
+            df['Location'].astype(str).str.startswith('SOFT-')
+        )
+    ]
+
+    # Remove rows where WaveNumber is not 0
+    df = df[df['WaveNumber'] == 0]
+
+    # Remove rows where ShipToName contains 'clinic' (case-insensitive)
+    df = df[~df['ShipToName'].astype(str).str.strip().str.lower().str.contains('clinic')]
+
     return df
+
 
 def apply_delivery_date_filter(df, delivery_range):
     if isinstance(delivery_range, tuple) and len(delivery_range) == 2:
@@ -342,6 +358,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
