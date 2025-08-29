@@ -95,11 +95,10 @@ def filter_picking_pool(df):
     return df
 
 
-def apply_delivery_date_filter(df, delivery_range):
-    if isinstance(delivery_range, tuple) and len(delivery_range) == 2:
-        start, end = pd.to_datetime(delivery_range[0]), pd.to_datetime(delivery_range[1])
-        return df[(df['DeliveryDate'] >= start) & (df['DeliveryDate'] <= end)]
-    return df
+def apply_delivery_date_filter(df, selected_date):
+    selected_date = pd.to_datetime(selected_date)
+    return df[df['DeliveryDate'] == selected_date]
+
 
 def merge_and_clean(df, sku_master):
     merged_check = df.merge(sku_master, how='left', left_on='SKU', right_on='SKU Code')
@@ -317,9 +316,10 @@ def main():
         gi_type = st.sidebar.radio("Filter by GI Type", ("All", "Single-line", "Multi-line"))
 
         min_date, max_date = picking_pool['DeliveryDate'].min(), picking_pool['DeliveryDate'].max()
-        delivery_range = st.sidebar.date_input("🗕️ Filter by Delivery Date", (min_date, max_date), min_value=min_date, max_value=max_date)
+        selected_date = st.sidebar.date_input("🗕️ Filter by Delivery Date", min_value=min_date, max_value=max_date)
 
-        picking_pool = apply_delivery_date_filter(picking_pool, delivery_range)
+        picking_pool = apply_delivery_date_filter(picking_pool, selected_date)
+
         df = merge_and_clean(picking_pool, sku_master)
         df = classify_and_assign(df)
 
@@ -358,6 +358,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
