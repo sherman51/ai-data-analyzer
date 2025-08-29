@@ -269,7 +269,7 @@ def finalize_output(df, gi_type):
     return df[[
         'IssueNo', 'SKU', 'Location_x', 'SKUDescription', 'Batch No', 'PickingQty',
         'Commercial Box Count', 'Delivery Date', 'ShipToName',
-        'Type', 'Job No', 'CartonDescription', 'WaveNumber'
+        'Type', 'Job No', 'CartonDescription'
     ]].drop_duplicates()
 
 def export_to_excel(output_df):
@@ -359,6 +359,7 @@ if picking_pool_file and sku_master_file:
     main()
 else:
     st.info("👈 Please upload both Picking Pool and SKU Master Excel files to begin.")
+
 
 
 
